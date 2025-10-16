@@ -18,7 +18,7 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: ${{ secrets.FTP_PORT }}
-          protocol: ftp
+          protocol: ftps
           server-dir: ${{ secrets.FTP_DIR }}
           local-dir: ./
           state-name: .ftp-deploy-sync-state.json

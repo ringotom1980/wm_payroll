@@ -1,0 +1,35 @@
+# ==========================================================
+# wm_payroll — Git ignore
+# ==========================================================
+
+# 環境變數與敏感資料
+.env
+.env.local
+.env.*.local
+
+# 依專案需要：暫存與快取
+temp/
+cache/
+*.log
+*.bak
+*.tmp
+
+# 系統檔
+.DS_Store
+Thumbs.db
+
+# 依需求：套件與產出
+/vendor/
+node_modules/
+
+# 匯出/資料檔（避免不小心上傳敏感資料）
+/sql/
+*.sql
+*.csv
+*.xlsx
+
+# 文件與筆記（可依需求調整）
+*.md
+
+# 部署狀態檔（FTP Deploy 會用）
+.ftp-deploy-sync-state.json

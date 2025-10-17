@@ -1,17 +1,24 @@
-name: 🚀 Deploy wm_payroll to Hostinger via FTP
+name: "🚀 Deploy wm_payroll to Hostinger via FTP"
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: 📦 Checkout repository
+      - name: "📦 Checkout repository"
         uses: actions/checkout@v4
 
-      - name: 🔄 FTP Deploy to Hostinger
+      # 如有 composer / npm，可在此安裝與編譯
+      # - name: "Install Composer deps"
+      #   run: composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
+      #
+      # - name: "Build frontend"
+      #   run: npm ci && npm run build
+
+      - name: "🔄 FTP Deploy to Hostinger"
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -19,16 +26,19 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           port: ${{ secrets.FTP_PORT }}
           protocol: ftps
-          server-dir: ${{ secrets.FTP_DIR }}
+          server-dir: ${{ secrets.FTP_DIR }}   # 例如: /public_html/wm_payroll/
           local-dir: ./
           state-name: .ftp-deploy-sync-state.json
           exclude: |
             **/.git*
             **/.github/**
+            **/node_modules/**
             **/docs/**
             **/sql/**
             **/temp/**
             **/*.md
             **/.env
+            **/.env.*
+            **/*.log
           log-level: standard
           dangerous-clean-slate: false

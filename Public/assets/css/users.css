@@ -1,1 +1,49 @@
-ECHO ¤w±Ò°Ê¡C
+/* Public/assets/css/users.css */
+.login-container {
+  max-width: 420px;
+  margin: 8vh auto;
+  padding: 24px;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+}
+.login-container h1 {
+  font-size: 20px;
+  margin: 0 0 16px 0;
+  text-align: center;
+}
+.login-form .form-row {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.login-form label {
+  font-size: 14px;
+}
+.login-form input {
+  padding: 10px 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  outline: none;
+}
+.login-form input:focus {
+  border-color: #888;
+}
+.form-actions {
+  margin-top: 8px;
+}
+.form-actions button {
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.error {
+  color: #b30000;
+  font-size: 14px;
+  margin-top: 10px;
+  text-align: center;
+}

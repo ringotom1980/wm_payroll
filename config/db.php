@@ -45,15 +45,22 @@ $options = [
 ];
 
 // 啟用 SSL（若提供）
-if (!empty($ssl_ca))   { $options[PDO::MYSQL_ATTR_SSL_CA]   = $ssl_ca; }
-if (!empty($ssl_cert)) { $options[PDO::MYSQL_ATTR_SSL_CERT] = $ssl_cert; }
-if (!empty($ssl_key))  { $options[PDO::MYSQL_ATTR_SSL_KEY]  = $ssl_key; }
+if (!empty($ssl_ca)) {
+    $options[PDO::MYSQL_ATTR_SSL_CA]   = $ssl_ca;
+}
+if (!empty($ssl_cert)) {
+    $options[PDO::MYSQL_ATTR_SSL_CERT] = $ssl_cert;
+}
+if (!empty($ssl_key)) {
+    $options[PDO::MYSQL_ATTR_SSL_KEY]  = $ssl_key;
+}
 
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
     // 連線後的安全/一致性設定
     $pdo->exec("SET time_zone = '+08:00';");
     $pdo->exec("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';");
+
 
     // （可選）SQL 除錯開關
     if (!empty($app['DEBUG_SQL'])) {

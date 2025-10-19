@@ -23,6 +23,7 @@ $cookieParams = [
 // 設定 Session 名稱與 Cookie 參數
 session_name($ss['NAME'] ?? 'wm_payroll_sid');
 if (PHP_VERSION_ID >= 70300) {
+    // 支援 samesite
     session_set_cookie_params($cookieParams);
 } else {
     // 舊版 fallback（不支援 samesite 明確設定）
@@ -40,7 +41,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 /** 取得目前登入的使用者（或 null） */
 function auth_user(): ?array {
-    return $_SESSION['user'] ?? null;
+    return isset($_SESSION['user']) && is_array($_SESSION['user']) ? $_SESSION['user'] : null;
 }
 
 /** 是否已登入 */
@@ -51,8 +52,10 @@ function is_logged_in(): bool {
 /** 強制需要登入（未登入回 401 JSON） */
 function require_login(): void {
     if (!is_logged_in()) {
-        http_response_code(401);
-        header('Content-Type: application/json; charset=utf-8');
+        if (!headers_sent()) {
+            http_response_code(401);
+            header('Content-Type: application/json; charset=utf-8');
+        }
         echo json_encode(['ok' => false, 'error' => 'UNAUTHORIZED'], JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -63,8 +66,10 @@ function require_role(string $role): void {
     require_login();
     $u = auth_user();
     if (!$u || !isset($u['role']) || ($u['role'] !== $role && $u['role'] !== 'ADMIN')) {
-        http_response_code(403);
-        header('Content-Type: application/json; charset=utf-8');
+        if (!headers_sent()) {
+            http_response_code(403);
+            header('Content-Type: application/json; charset=utf-8');
+        }
         echo json_encode(['ok' => false, 'error' => 'FORBIDDEN'], JSON_UNESCAPED_UNICODE);
         exit;
     }

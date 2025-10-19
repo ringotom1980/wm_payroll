@@ -1,1 +1,46 @@
-ECHO �w�ҰʡC
+/* Public/assets/css/employees.css */
+.section-top { margin-bottom: 16px; }
+.layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+.content { padding: 16px 20px; }
+.page-title { margin: 6px 0 14px; }
+
+.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+.section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.section-header h2 { margin: 0; font-size: 16px; }
+.toolbar { display: flex; align-items: center; gap: 8px; }
+.toolbar input[type="search"] { width: 320px; }
+
+.grid.two-col { display: grid; grid-template-columns: repeat(2,minmax(200px,1fr)); gap: 12px 16px; }
+label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+input, select { height: 36px; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 8px; }
+.req { color: #dc2626; margin-left: 4px; }
+.err { color: #dc2626; font-size: 12px; height: 14px; }
+
+.actions { display: flex; gap: 8px; margin-top: 8px; }
+.btn { border: 1px solid #cbd5e1; background: #f8fafc; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+.btn.primary { background: #0ea5e9; border-color: #0284c7; color: #fff; }
+.btn.ghost { background: transparent; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.table-wrap { overflow: auto; }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { border-bottom: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; white-space: nowrap; }
+.table tbody tr { cursor: pointer; }
+.table tbody tr:hover { background: #f8fafc; }
+.op-col { width: 90px; text-align: center; }
+
+.pager { display: flex; align-items: center; gap: 8px; padding: 10px; justify-content: flex-end; }
+
+/* 置中確認窗 + 灰色遮罩 */
+.mask { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 999; }
+.modal { position: fixed; inset: 0; display: grid; place-items: center; z-index: 1000; }
+.modal-body { background: #fff; width: min(520px, 90vw); border-radius: 12px; border: 1px solid #e5e7eb; padding: 18px; }
+.modal-body h3 { margin: 0 0 8px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+
+/* 手機寬度 */
+@media (max-width: 960px) {
+  .layout { grid-template-columns: 1fr; }
+  .grid.two-col { grid-template-columns: 1fr; }
+  .toolbar input[type="search"] { width: 100%; }
+}

@@ -9,9 +9,9 @@ header('Content-Type: application/json; charset=utf-8');
 
 try {
     /** @var PDO $pdo */
-    $pdo = require __DIR__ . '/db.php';
+    $pdo = require dirname(__DIR__, 2) . '/config/db.php';
     if (!$pdo instanceof PDO) {
-        throw new RuntimeException('PDO not returned from db.php');
+        throw new RuntimeException('PDO not returned from config/db.php');
     }
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 

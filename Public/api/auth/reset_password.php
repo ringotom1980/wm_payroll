@@ -31,8 +31,12 @@ try {
         exit;
     }
 
-    // 找到有效 token（未過期）
-    $stmt = $pdo->prepare("SELECT user_id FROM users WHERE reset_token = :t AND reset_token_expires > NOW() LIMIT 1");
+    $stmt = $pdo->prepare(
+        "SELECT user_id FROM users
+          WHERE reset_token = :t
+            AND reset_expires_at > NOW()
+          LIMIT 1"
+    );
     $stmt->execute([':t' => $token]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -42,16 +46,21 @@ try {
         exit;
     }
 
-    // 更新密碼 & 清除 token
     $hash = password_hash($pass, PASSWORD_DEFAULT);
-    $upd = $pdo->prepare("UPDATE users SET password_hash = :ph, reset_token = NULL, reset_token_expires = NULL WHERE user_id = :id");
+    $upd = $pdo->prepare(
+        "UPDATE users
+            SET password_hash = :ph,
+                reset_token = NULL,
+                reset_expires_at = NULL
+          WHERE user_id = :id"
+    );
     $upd->execute([':ph' => $hash, ':id' => (int)$row['user_id']]);
 
     // 自動登入（可選）
-    $stmt2 = $pdo->prepare("SELECT user_id, username, role, display_name, last_login_at FROM users WHERE user_id = :id LIMIT 1");
+    $stmt2 = $pdo->prepare("SELECT user_id, username, role, display_name, last_login_at, is_active FROM users WHERE user_id = :id LIMIT 1");
     $stmt2->execute([':id' => (int)$row['user_id']]);
     $urow = $stmt2->fetch(PDO::FETCH_ASSOC);
-    if ($urow) login_user($urow);
+    if ($urow && (int)($urow['is_active'] ?? 1) === 1) login_user($urow);
 
     echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {

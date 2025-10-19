@@ -26,30 +26,33 @@ try {
         exit;
     }
 
-    // 查使用者（ACTIVE）
-    $stmt = $pdo->prepare("SELECT user_id, username, status FROM users WHERE username = :u LIMIT 1");
+    $stmt = $pdo->prepare("SELECT user_id, username, is_active FROM users WHERE username = :u LIMIT 1");
     $stmt->execute([':u' => $username]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // 安全考量：不洩漏存在與否，但仍統一回 ok:true
-    if (!$row || (isset($row['status']) && strtoupper((string)$row['status']) !== 'ACTIVE')) {
+    // 安全考量：不洩漏是否存在
+    if (!$row || (isset($row['is_active']) && (int)$row['is_active'] !== 1)) {
         echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    // 產生 token 與 30 分鐘期限
     $token   = bin2hex(random_bytes(32));
     $expires = 30; // 分鐘
 
-    $upd = $pdo->prepare("UPDATE users SET reset_token = :t, reset_token_expires = DATE_ADD(NOW(), INTERVAL :m MINUTE) WHERE user_id = :id");
-    $upd->bindValue(':t', $token, PDO::PARAM_STR);
-    $upd->bindValue(':m', $expires, PDO::PARAM_INT);
+    $upd = $pdo->prepare(
+        "UPDATE users
+            SET reset_token = :t,
+                reset_expires_at = DATE_ADD(NOW(), INTERVAL :m MINUTE)
+          WHERE user_id = :id"
+    );
+    $upd->bindValue(':t',  $token, PDO::PARAM_STR);
+    $upd->bindValue(':m',  $expires, PDO::PARAM_INT);
     $upd->bindValue(':id', (int)$row['user_id'], PDO::PARAM_INT);
     $upd->execute();
 
-    // 回傳 reset 連結（先開發用；日後可改寄信）
     $base = rtrim((string)($app['URLS']['APP_URL'] ?? ''), '/');
     $resetUrl = ($base ?: '') . '/auth/reset?token=' . urlencode($token);
+
     echo json_encode(['ok' => true, 'data' => ['reset_url' => $resetUrl]], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     http_response_code(500);

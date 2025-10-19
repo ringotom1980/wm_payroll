@@ -7,8 +7,13 @@
 
   async function fetchJSON(url, opt = {}) {
     const r = await fetch(url, { credentials: 'same-origin', ...opt });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return await r.json();
+    const text = await r.text();
+    try {
+      return JSON.parse(text);
+    } catch (err) {
+      console.error(`Non-JSON from ${url} ↴\n${text.slice(0, 300)}`);
+      throw err;
+    }
   }
 
   function setText(id, v) {
@@ -93,7 +98,7 @@
               <td>${r.module}</td>
               <td>${r.content}</td>
               <td>${r.user}</td>
-            </tr>`
+            </tr>`,
         )
         .join('');
     } catch (e) {

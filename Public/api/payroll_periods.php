@@ -9,7 +9,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 try {
     /** @var PDO $pdo */
-    $pdo = require __DIR__ . '/pdo.php';
+    $pdo = require __DIR__ . '/db.php';
     if (!$pdo instanceof PDO) {
         throw new RuntimeException('PDO not returned from pdo.php');
     }

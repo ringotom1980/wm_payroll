@@ -25,8 +25,10 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
 <body>
 <header class="main-header">
   <div class="header-left">
-    <h1 class="site-title"><i class="iconoir-building"></i> <?= $APP_NAME ?></h1>
-  </div>
+  <img src="/assets/img/WM-logo.png" alt="<?= $APP_NAME ?>" class="site-logo">
+  <h1 class="site-title"><?= $APP_NAME ?></h1>
+</div>
+
   <div class="header-right">
     <nav class="top-nav">
       <a href="/dashboard" class="nav-link"><i class="iconoir-home-simple"></i> 儀表板</a>

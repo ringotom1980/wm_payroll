@@ -21,9 +21,9 @@ RewriteRule ^api/(employees|salary_master|payroll_periods|payroll_monthlies|payr
 RewriteRule ^api/(employees|salary_master|payroll_periods|payroll_monthlies|payroll_yearstats|gov_rate_snapshots)/([a-z_]+)$ api/$1.php?action=$2 [L,QSA]
 
 # 3) 頁面漂亮網址
-#    /login → index.php、/dashboard → dashboard.php
-RewriteRule ^login/?$ index.php [L,QSA]
+RewriteRule ^login/?$ auth/login.php [L,QSA]
 RewriteRule ^dashboard/?$ dashboard.php [L,QSA]
+
 
 #    modules：/modules/{頁面} → modules/{頁面}.php
 RewriteRule ^modules/(employees|salary_master|payroll_periods|payroll_monthlies|payroll_yearstats|users)/?$ modules/$1.php [L,QSA]

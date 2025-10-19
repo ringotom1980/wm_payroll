@@ -67,35 +67,88 @@ a:hover{text-decoration:none; color:var(--brand-600);} /* 🚫 取消全站底�
 }
 
 /* === Sidebar === */
-.sidebar{
-  width:210px;
-  float:left;
-  background:#f9fafb;
-  border-right:1px solid var(--line);
-  min-height:calc(100vh - 60px);
-  padding:16px 0;
+.sidebar {
+  width: 210px;
+  float: left;
+  background: #f9fafb;
+  border-right: 1px solid var(--line);
+  min-height: calc(100vh - 60px);
+  padding: 16px 0;
+  text-align: center; /* 🟦 所有項目置中 */
 }
-.menu{list-style:none;margin:0;padding:0;}
-.menu-section{
-  margin:10px 16px 4px;
-  font-size:13px;
-  color:var(--muted);
-  font-weight:600;
+
+.menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.menu-link{
-  display:block;
-  padding:8px 20px;
-  color:var(--ink);
-  text-decoration:none;
-  border-left:3px solid transparent;
-  transition:background .2s,border-left-color .2s,color .3s ease;
+
+/* --- 區塊標題 --- */
+.menu-section {
+  margin: 20px 0 10px;
+  padding: 8px 0;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid #e0e7ef;
+  background: #f3f4f6;
 }
-.menu-link:hover{
-  background:#f1f5f9;
-  border-left-color:var(--brand);
-  color:var(--brand);
-  text-decoration:none; /* 🚫 防底線 */
+
+/* --- 選單項目 --- */
+.menu-link {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* 🟦 icon + 文字置中 */
+  gap: 8px;
+  padding: 10px 16px;
+  color: var(--ink);
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: all 0.25s ease;
+  font-weight: 500;
+  border-radius: 6px; /* 🟦 柔和圓角 */
+  margin: 2px 10px;
 }
+
+.menu-link i[class^="iconoir-"] {
+  font-size: 18px;
+  color: var(--muted);
+  transition: color .3s ease;
+}
+
+/* --- hover 效果 --- */
+.menu-link:hover {
+  background: #e8f2fb;
+  color: var(--brand);
+  border-left-color: var(--brand);
+  text-decoration: none;
+}
+.menu-link:hover i[class^="iconoir-"] {
+  color: var(--brand);
+}
+
+/* --- active 狀態（目前頁面） --- */
+.menu-link.active {
+  background: #dbeafe;
+  border-left-color: var(--brand);
+  color: var(--brand-600);
+  font-weight: 600;
+}
+.menu-link.active i[class^="iconoir-"] {
+  color: var(--brand-600);
+}
+
+/* --- 區塊之間距離更自然 --- */
+.menu-section:first-of-type {
+  border-top: none;
+}
+.menu-section:not(:first-of-type) {
+  margin-top: 24px;
+}
+
 
 /* === 主要內容區 === */
 .container{margin-left:210px;padding:16px;}

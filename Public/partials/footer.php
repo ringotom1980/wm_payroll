@@ -14,6 +14,6 @@ $version = htmlspecialchars($app['APP_VERSION'] ?? 'v1.0.0', ENT_QUOTES);
 </footer>
 
 <!-- 全站共用腳本（外掛，不內嵌） -->
-<script src="/assets/js/app.js?v=2"></script>
-<script src="/assets/js/auth/logout.js?v=2"></script>
+<script src="/assets/js/app.js?v=3"></script>
+<script src="/assets/js/auth/logout.js?v=3"></script>
 

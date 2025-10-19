@@ -24,28 +24,87 @@ a{color:var(--brand); text-decoration:none}
 a:hover{text-decoration:underline}
 
 /* === Header === */
-.main-header{
-  display:flex; align-items:center; justify-content:space-between;
-  padding:10px 20px; background:var(--header); color:#fff;
-  border-bottom:1px solid rgba(255,255,255,.08);
+.main-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--header);
+  color: #fff;
+  border-bottom: 1px solid rgba(255,255,255,.08);
 }
-.header-left{display:flex; align-items:center; gap:8px}
-.brand{display:flex; align-items:center; gap:8px; color:inherit; text-decoration:none}
-.site-logo{height:40px; width:auto; display:block}
-.site-title{margin:0; font-size:20px; font-weight:600}
-.top-nav .nav-link{color:#fff; text-decoration:none; margin-left:16px; font-size:15px}
-.top-nav .nav-link:hover{text-decoration:underline}
-.logout-link{color:#f87171}
 
-/* Icon base style */
-.menu-link i[class^="iconoir-"],
-.nav-link i[class^="iconoir-"],
-.site-title i[class^="iconoir-"]{
-  font-size:18px; vertical-align:middle; margin-right:6px; color:#d1d5db; transition:color .2s ease;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.menu-link:hover i[class^="iconoir-"],
-.nav-link:hover i[class^="iconoir-"],
-.nav-link.logout-link:hover i[class^="iconoir-"]{ color:#fff }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
+  transition: color .4s ease;
+}
+.brand:hover {
+  color: var(--brand);
+}
+
+.site-logo { height: 40px; width: auto; display: block; }
+.site-title { margin: 0; font-size: 20px; font-weight: 600; }
+
+.top-nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.top-nav .nav-link {
+  color: #fff;
+  text-decoration: none;
+  font-size: 15px;
+  transition: color .4s ease;
+}
+.top-nav .nav-link:hover {
+  color: var(--brand);
+  text-decoration: none; /* hover 不要底線 */
+}
+.logout-link { color: #f87171; }
+.logout-link:hover { color: #ef4444; }
+
+/* === Icon 樣式 === */
+.nav-link i[class^="iconoir-"],
+.site-title i[class^="iconoir-"] {
+  font-size: 18px;
+  vertical-align: middle;
+  margin-right: 6px;
+  color: inherit;
+  transition: color .4s ease;
+}
+
+
+/* Header 導覽列（深色底） */
+.top-nav .nav-link i[class^="iconoir-"] {
+  color: #e5e7eb;
+}
+.top-nav .nav-link:hover i[class^="iconoir-"],
+.top-nav .nav-link.logout-link:hover i[class^="iconoir-"] {
+  color: var(--brand); /* hover 改亮藍色 */
+}
+
+/* Sidebar（淺底） */
+.menu-link i[class^="iconoir-"] {
+  color: var(--muted);
+}
+.menu-link:hover i[class^="iconoir-"] {
+  color: var(--brand); /* hover 改品牌藍 */
+}
+
+/* Site Title Icon（logo區域） */
+.site-title i[class^="iconoir-"] {
+  color: var(--brand);
+}
 
 /* === Sidebar === */
 .sidebar{
@@ -55,9 +114,12 @@ a:hover{text-decoration:underline}
 .menu{list-style:none; margin:0; padding:0}
 .menu-section{margin:10px 16px 4px; font-size:13px; color:var(--muted); font-weight:600}
 .menu-link{
-  display:block; padding:8px 20px; color:var(--ink); text-decoration:none; border-left:3px solid transparent
+  display:block; padding:8px 20px; color:var(--ink); text-decoration:none; border-left:3px solid transparent;
+  transition:background .2s,border-left-color .2s;
 }
-.menu-link:hover{background:#f3f4f6; border-left-color:#3b82f6}
+.menu-link:hover{
+  background:#f1f5f9; border-left-color:var(--brand);
+}
 
 /* === 主要內容區 === */
 .container{margin-left:210px; padding:16px}

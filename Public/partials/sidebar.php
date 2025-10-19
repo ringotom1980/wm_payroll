@@ -14,7 +14,7 @@
     <li><a href="/modules/payroll_periods.php" class="menu-link"><i class="iconoir-calendar"></i> 薪資期別</a></li>
 
     <li class="menu-section">薪資處理</li>
-    <li><a href="/modules/payroll_monthlies.php" class="menu-link"><i class="iconoir-invoice"></i> 當月薪資</a></li>
+    <li><a href="/modules/payroll_monthlies.php" class="menu-link"><i class="iconoir-coins"></i> 當月薪資</a></li>
     <li><a href="/modules/payroll_yearstats.php" class="menu-link"><i class="iconoir-stats-report"></i> 年度統計</a></li>
 
     <li class="menu-section">系統管理</li>

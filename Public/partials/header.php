@@ -11,7 +11,7 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
   <title><?= $APP_NAME ?></title>
 
   <!-- 全站共用樣式（內含 Iconoir 匯入） -->
-  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/app.css?v=2">
   <!-- Favicon 基本 -->
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 <link rel="shortcut icon" href="/assets/img/WM-logo.png">

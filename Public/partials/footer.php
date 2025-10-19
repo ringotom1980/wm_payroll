@@ -12,3 +12,8 @@ $version = 'v1.0.0'; // 可改成讀取 config/app.php 或 git tag
     <span class="muted">版本：<?= $version ?>｜政府分攤資料：最新</span>
   </div>
 </footer>
+
+<!-- 全站共用腳本（不得內嵌） -->
+<script src="/assets/js/app.js?v=2"></script>
+</body>
+</html>

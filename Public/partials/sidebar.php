@@ -1,6 +1,6 @@
 <?php
 // Public/partials/sidebar.php
-// 注意：依照你的要求「不修改結構，只增連結」
+// 注意：依你的要求「不修改結構，只增連結」
 ?>
 <aside class="sidebar">
   <ul class="menu">

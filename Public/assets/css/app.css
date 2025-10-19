@@ -1,97 +1,143 @@
-/* === Iconoir 全站匯入（建議鎖定版本，例如 @7.7.0） === */
-@import url("https://cdn.jsdelivr.net/gh/iconoir-icons/iconoir@main/css/iconoir.css");
+/* === Iconoir（鎖定版本） === */
+@import url("https://cdn.jsdelivr.net/gh/iconoir-icons/iconoir@7.7.0/css/iconoir.css");
 
-/* --- Header --- */
-.main-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 20px;
-  background: #1f2937;
-  color: #fff;
-}
-.site-title { margin: 0; font-size: 20px; font-weight: 600; }
-.top-nav .nav-link {
-  color: #fff;
-  text-decoration: none;
-  margin-left: 16px;
-  font-size: 15px;
-}
-.top-nav .nav-link:hover { text-decoration: underline; }
-.logout-link { color: #f87171; }
-
-/* --- Sidebar --- */
-.sidebar {
-  width: 210px;
-  float: left;
-  background: #f9fafb;
-  border-right: 1px solid #e5e7eb;
-  min-height: calc(100vh - 60px);
-  padding: 16px 0;
-}
-.menu { list-style: none; margin: 0; padding: 0; }
-.menu-section {
-  margin: 10px 16px 4px;
-  font-size: 13px;
-  color: #6b7280;
-  font-weight: 600;
-}
-.menu-link {
-  display: block;
-  padding: 8px 20px;
-  color: #111827;
-  text-decoration: none;
-  border-left: 3px solid transparent;
-}
-.menu-link:hover {
-  background: #f3f4f6;
-  border-left-color: #3b82f6;
+/* === 基礎設定 / 色票 === */
+:root{
+  --brand:#0ea5e9;          /* 主色：按鈕、強調 */
+  --brand-600:#0284c7;
+  --ink:#111827;            /* 主要文字 */
+  --muted:#6b7280;          /* 次要文字 */
+  --bg:#f3f4f6;             /* 主背景 */
+  --card:#ffffff;           /* 卡片底色 */
+  --line:#e5e7eb;           /* 邊框色 */
+  --thead:#f8fafc;          /* 表頭底色 */
+  --header:#1f2937;         /* 頂欄底色 */
 }
 
-/* --- Footer --- */
-.main-footer {
-  clear: both;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 20px;
-  border-top: 1px solid #e5e7eb;
-  background: #f9fafb;
-  font-size: 13px;
-  color: #6b7280;
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Noto Sans","PingFang TC","Microsoft JhengHei",sans-serif;
 }
+a{color:var(--brand); text-decoration:none}
+a:hover{text-decoration:underline}
 
-/* --- Iconoir icons base style --- */
+/* === Header === */
+.main-header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 20px; background:var(--header); color:#fff;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.header-left{display:flex; align-items:center; gap:8px}
+.brand{display:flex; align-items:center; gap:8px; color:inherit; text-decoration:none}
+.site-logo{height:40px; width:auto; display:block}
+.site-title{margin:0; font-size:20px; font-weight:600}
+.top-nav .nav-link{color:#fff; text-decoration:none; margin-left:16px; font-size:15px}
+.top-nav .nav-link:hover{text-decoration:underline}
+.logout-link{color:#f87171}
+
+/* Icon base style */
 .menu-link i[class^="iconoir-"],
 .nav-link i[class^="iconoir-"],
-.site-title i[class^="iconoir-"] {
-  font-size: 18px;
-  vertical-align: middle;
-  margin-right: 6px;
-  color: #2c3e50;
-  transition: color 0.2s ease;
+.site-title i[class^="iconoir-"]{
+  font-size:18px; vertical-align:middle; margin-right:6px; color:#d1d5db; transition:color .2s ease;
 }
-
 .menu-link:hover i[class^="iconoir-"],
 .nav-link:hover i[class^="iconoir-"],
-.nav-link.logout-link:hover i[class^="iconoir-"] {
-  color: #007bff; /* 主色可換成品牌色 */
+.nav-link.logout-link:hover i[class^="iconoir-"]{ color:#fff }
+
+/* === Sidebar === */
+.sidebar{
+  width:210px; float:left; background:#f9fafb; border-right:1px solid var(--line);
+  min-height:calc(100vh - 60px); padding:16px 0;
+}
+.menu{list-style:none; margin:0; padding:0}
+.menu-section{margin:10px 16px 4px; font-size:13px; color:var(--muted); font-weight:600}
+.menu-link{
+  display:block; padding:8px 20px; color:var(--ink); text-decoration:none; border-left:3px solid transparent
+}
+.menu-link:hover{background:#f3f4f6; border-left-color:#3b82f6}
+
+/* === 主要內容區 === */
+.container{margin-left:210px; padding:16px}
+.row{margin-bottom:16px}
+
+/* === 卡片 === */
+.card{
+  background:var(--card); border:1px solid var(--line); border-radius:14px;
+  box-shadow:0 1px 2px rgba(16,24,40,.06);
+  padding:16px;
+}
+.card-header{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; margin:-4px -4px 12px -4px; padding:4px;
+}
+.card-title{margin:0; font-size:16px; font-weight:700; color:#0f172a}
+.card-tools{display:flex; align-items:center; gap:8px}
+
+/* === KPI 區塊 === */
+.kpi-grid{
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px;
+}
+@media (max-width:1200px){ .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){ .kpi-grid{grid-template-columns:1fr} }
+
+.kpi{padding:14px 16px}
+.kpi-title{font-size:12px; color:var(--muted); margin-bottom:6px}
+.kpi-value{font-size:22px; font-weight:800; color:#0f172a}
+.kpi-sub{font-size:12px; color:var(--muted)}
+
+/* === 表格 === */
+.table-wrap{width:100%; overflow-x:auto}
+.table{
+  width:100%; border-collapse:separate; border-spacing:0;
+  background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden;
+}
+.table thead th{
+  background:var(--thead); color:#334155; font-weight:700; font-size:13px; text-align:left;
+  padding:10px 12px; border-bottom:1px solid var(--line);
+}
+.table tbody td{padding:10px 12px; border-bottom:1px solid #f1f5f9; color:var(--ink)}
+.table tbody tr:hover{background:#f9fafb}
+
+/* === 分頁/工具 === */
+.pager{display:flex; align-items:center; gap:8px; justify-content:flex-end; margin-top:12px}
+
+/* === 按鈕 === */
+.btn{
+  display:inline-flex; align-items:center; gap:8px; padding:8px 12px;
+  border-radius:10px; border:1px solid var(--line);
+  background:var(--brand); color:#fff; font-weight:600; cursor:pointer;
+  transition:filter .2s, transform .02s, background .2s;
+}
+.btn:hover{filter:brightness(1.05)}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.6; cursor:not-allowed}
+
+.btn.primary{background:var(--brand)}
+.btn.secondary{background:#fff; color:#0f172a}
+.btn-ghost{
+  background:transparent; color:var(--ink); border:1px solid var(--line);
+}
+.btn-ghost:hover{background:#f8fafc}
+
+/* === 連結樣式 === */
+.link{color:var(--brand); font-weight:600}
+.link:hover{text-decoration:underline}
+
+/* === 頁尾 === */
+.main-footer{
+  clear:both; display:flex; justify-content:space-between; align-items:center;
+  padding:10px 20px; border-top:1px solid var(--line); background:#f9fafb;
+  font-size:13px; color:var(--muted);
 }
 
-/* --- header的logo --- */
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.site-logo {
-  height: 40px;
-  width: auto;
-}
-
-.site-title {
-  font-size: 1.4rem;
-  font-weight: 600;
-  margin: 0;
-}
+/* === 通用/工具 === */
+main{padding:16px}
+img{max-width:100%; height:auto}
+.center{text-align:center}
+.right{text-align:right}
+.muted{color:var(--muted)}
+.auth-bar{display:flex; align-items:center; gap:10px; justify-content:flex-end}
+.auth-user{font-weight:600}

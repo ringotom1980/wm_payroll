@@ -20,7 +20,7 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
   </section>
 
   <!-- KPI Cards -->
-  <section class="row">
+  <section class="row kpi-grid">
     <div class="card kpi">
       <div class="kpi-title">員工總數</div>
       <div id="kpiEmployees" class="kpi-value">—</div>
@@ -50,7 +50,7 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
   <section class="row">
     <div class="card actions">
       <div class="actions-left">
-        <button id="btnRefreshGov" class="btn-primary" type="button" title="手動同步政府開放資料">
+        <button id="btnRefreshGov" class="btn" type="button" title="手動同步政府開放資料">
           手動同步政府資料
         </button>
         <span id="govRefreshMsg" class="muted" style="margin-left:10px;"></span>
@@ -58,7 +58,7 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
     </div>
   </section>
 
-  <!-- 近期異動（例如：最近 10 筆期別變動/薪資計算/使用者操作） -->
+  <!-- 近期異動 -->
   <section class="row">
     <div class="card">
       <div class="card-header">
@@ -92,7 +92,7 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
     </div>
   </section>
 
-  <!-- 月度統計（簡表；詳細在 /modules/payroll_yearstats.php） -->
+  <!-- 月度統計（簡表） -->
   <section class="row">
     <div class="card">
       <div class="card-header">
@@ -121,9 +121,5 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
 </main>
 
 <?php require __DIR__ . '/partials/footer.php'; ?>
-
-<!-- 外掛腳本（不得內嵌） -->
-<script src="/assets/js/app.js"></script>
-
 </body>
 </html>

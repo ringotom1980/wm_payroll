@@ -1,8 +1,5 @@
 <?php
 // Public/modules/employees.php
-require_once __DIR__ . '/../partials/header.php';
-require_once __DIR__ . '/../partials/sidebar.php';
-require_once __DIR__ . '/../partials/footer.php';
 ?>
 <!DOCTYPE html>
 <html lang="zh-Hant">

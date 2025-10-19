@@ -51,6 +51,29 @@
     modalCancel: $('#modalCancel'),
   };
 
+  // === 加在 els 物件宣告之後 ===
+els.mask && (els.mask.hidden = true);
+els.modal && (els.modal.hidden = true);
+
+
+// 點遮罩 = 取消並關閉
+if (els.mask) {
+  els.mask.addEventListener('click', () => {
+    els.mask.hidden = true;
+    els.modal.hidden = true;
+  });
+}
+
+
+// 按 ESC 關閉
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !els.modal.hidden) {
+    els.mask.hidden = true;
+    els.modal.hidden = true;
+  }
+});
+
+
   // state
   let editing = false;  // 是否帶入編修
   let editModeActive = false;

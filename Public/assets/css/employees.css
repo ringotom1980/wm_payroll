@@ -1,4 +1,8 @@
 /* Public/assets/css/employees.css */
+/* 保證 hidden 一定隱藏（避免被其他樣式覆蓋） */
+[hidden] { display: none !important; }
+
+
 .section-top { margin-bottom: 16px; }
 .layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
 .content { padding: 16px 20px; }

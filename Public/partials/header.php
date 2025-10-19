@@ -19,6 +19,7 @@ $logged_in = is_logged_in();
   <!-- Favicon / PWA 基本 -->
   <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
   <link rel="shortcut icon" href="/assets/img/WM-logo.png">
+  <link rel="shortcut icon" href="/assets/img/WM-logo.png" type="image/png">
   <link rel="apple-touch-icon" href="/assets/img/WM-logo.png">
 </head>
 <body>

@@ -164,7 +164,6 @@
     </div>
   </div>
 
-  <script src="/assets/js/auth/login.js" defer></script>
   <script src="/assets/js/employees.js" defer></script>
 </body>
 </html>

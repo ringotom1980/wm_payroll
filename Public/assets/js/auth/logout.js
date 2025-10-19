@@ -1,21 +1,25 @@
 // Public/assets/js/auth/logout.js
 (() => {
-  const logoutLinks = document.querySelectorAll('#topLogout, #btnLogout');
+  // 找到所有登出按鈕（header 或頁面內）
+  const logoutBtns = document.querySelectorAll('#topLogout, #btnLogout');
 
-  async function handleLogout() {
+  async function handleLogout(e) {
+    e.preventDefault();
     try {
-      const r = await fetch('/api/auth/logout.php', { credentials: 'same-origin' });
-      const data = await r.json();
+      const res = await fetch('/api/auth/logout.php', {
+        credentials: 'same-origin'
+      });
+      const data = await res.json();
       if (data.ok) {
-        // 登出成功 → 回登入頁並顯示提示
+        // ✅ 成功登出 → 導向登入頁（加提示參數）
         window.location.href = '/auth/login.php?logged_out=1';
       } else {
-        alert('登出失敗：' + (data.message || '未知錯誤'));
+        alert('登出失敗：' + (data.error || data.message || '未知錯誤'));
       }
-    } catch (e) {
-      alert('登出時發生錯誤：' + e.message);
+    } catch (err) {
+      alert('登出時發生錯誤：' + err.message);
     }
   }
 
-  logoutLinks.forEach(el => el.addEventListener('click', handleLogout));
+  logoutBtns.forEach(btn => btn.addEventListener('click', handleLogout));
 })();

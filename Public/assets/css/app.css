@@ -1,31 +1,79 @@
+/* === Iconoir 全站匯入（建議鎖定版本，例如 @7.7.0） === */
+@import url("https://cdn.jsdelivr.net/gh/iconoir-icons/iconoir@main/css/iconoir.css");
+
 /* --- Header --- */
-.main-header{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:10px 20px;background:#1f2937;color:#fff;
+.main-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: #1f2937;
+  color: #fff;
 }
-.site-title{margin:0;font-size:20px;font-weight:600;}
-.top-nav .nav-link{color:#fff;text-decoration:none;margin-left:16px;font-size:15px}
-.top-nav .nav-link:hover{text-decoration:underline}
-.logout-link{color:#f87171}
+.site-title { margin: 0; font-size: 20px; font-weight: 600; }
+.top-nav .nav-link {
+  color: #fff;
+  text-decoration: none;
+  margin-left: 16px;
+  font-size: 15px;
+}
+.top-nav .nav-link:hover { text-decoration: underline; }
+.logout-link { color: #f87171; }
 
 /* --- Sidebar --- */
-.sidebar{
-  width:210px;float:left;background:#f9fafb;border-right:1px solid #e5e7eb;
-  min-height:calc(100vh - 60px);padding:16px 0;
+.sidebar {
+  width: 210px;
+  float: left;
+  background: #f9fafb;
+  border-right: 1px solid #e5e7eb;
+  min-height: calc(100vh - 60px);
+  padding: 16px 0;
 }
-.menu{list-style:none;margin:0;padding:0;}
-.menu-section{
-  margin:10px 16px 4px;font-size:13px;color:#6b7280;font-weight:600;
+.menu { list-style: none; margin: 0; padding: 0; }
+.menu-section {
+  margin: 10px 16px 4px;
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 600;
 }
-.menu-link{
-  display:block;padding:8px 20px;color:#111827;text-decoration:none;
-  border-left:3px solid transparent;
+.menu-link {
+  display: block;
+  padding: 8px 20px;
+  color: #111827;
+  text-decoration: none;
+  border-left: 3px solid transparent;
 }
-.menu-link:hover{background:#f3f4f6;border-left-color:#3b82f6}
+.menu-link:hover {
+  background: #f3f4f6;
+  border-left-color: #3b82f6;
+}
 
 /* --- Footer --- */
-.main-footer{
-  clear:both;display:flex;justify-content:space-between;
-  align-items:center;padding:10px 20px;border-top:1px solid #e5e7eb;
-  background:#f9fafb;font-size:13px;color:#6b7280;
+.main-footer {
+  clear: both;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* --- Iconoir icons base style --- */
+.menu-link i[class^="iconoir-"],
+.nav-link i[class^="iconoir-"],
+.site-title i[class^="iconoir-"] {
+  font-size: 18px;
+  vertical-align: middle;
+  margin-right: 6px;
+  color: #2c3e50;
+  transition: color 0.2s ease;
+}
+
+.menu-link:hover i[class^="iconoir-"],
+.nav-link:hover i[class^="iconoir-"],
+.nav-link.logout-link:hover i[class^="iconoir-"] {
+  color: #007bff; /* 主色可換成品牌色 */
 }

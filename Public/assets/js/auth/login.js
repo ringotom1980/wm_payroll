@@ -6,8 +6,18 @@
   const btn = $('#btnLogin');
 
   function setMsg(txt, kind = 'error') {
-    msg.textContent = txt || '';
-    msg.className = 'msg ' + (txt ? kind : '');
+    const el = document.getElementById('msg');
+    el.textContent = txt || '';
+    el.className = 'msg ' + (txt ? `${kind} show` : '');
+  }
+
+  // 若有 ?logged_out=1，顯示提示
+  // 顯示登出提示
+  const params = new URLSearchParams(location.search);
+  if (params.get('logged_out')) {
+    const msg = document.getElementById('msg');
+    msg.textContent = '您已成功登出';
+    msg.className = 'msg info';
   }
 
   form.addEventListener('submit', async (e) => {
@@ -17,30 +27,34 @@
 
     const payload = {
       username: $('#username').value.trim(),
-      password: $('#password').value
+      password: $('#password').value,
     };
     if (!payload.username || !payload.password) {
-      setMsg('請輸入帳號與密碼'); btn.disabled = false; return;
+      setMsg('請輸入帳號與密碼');
+      btn.disabled = false;
+      return;
     }
 
     try {
       const r = await fetch('/api/auth/login.php', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify(payload),
       });
       const data = await r.json().catch(() => ({}));
 
       if (!r.ok || !data.ok) {
-        setMsg(data.error || `登入失敗（HTTP ${r.status}）`, 'error');
+        setMsg(data.error || `登入失敗（HTTP ${r.status}）`);
         btn.disabled = false;
         return;
       }
+
       // 登入成功 → 導向儀表板
       window.location.assign('/dashboard');
     } catch (err) {
-      setMsg('網路或伺服器異常，請稍後再試', 'error');
+      setMsg('網路或伺服器異常，請稍後再試');
+    } finally {
       btn.disabled = false;
     }
   });

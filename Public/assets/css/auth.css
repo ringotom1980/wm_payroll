@@ -1,21 +1,174 @@
-:root{--bg: #f6f7fb;--card: #fff;--text: #222;--muted: #6b7280;--primary: #2563eb;--primary-hover: #1d4ed8;--danger: #b91c1c;--border: #e5e7eb;}
-*{box-sizing: border-box;}
-body,html{height: 100%;}
-body{margin: 0;font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background: var(--bg);color: var(--text);}
-.login-wrap{min-height: 100%;display: grid;place-items: center;padding: 24px;}
-.login-card{width: 100%;max-width: 420px;background: var(--card);border: 1px solid var(--border);border-radius: 16px;padding: 28px 28px 22px;box-shadow: 0 8px 24px rgba(0,0,0,.06);}
-.app-title{margin: 0 0 6px;font-size: 20px;color: var(--muted);font-weight: 600;text-align: center;}
-.card-title{margin: 0 0 20px;font-size: 24px;text-align: center;}
-.field{display: flex;flex-direction: column;gap: 8px;margin-bottom: 14px;}
-.field span{font-size: 14px;color: var(--muted);}
-.field input{height: 42px;padding: 10px 12px;border: 1px solid var(--border);border-radius: 10px;font-size: 16px;outline: 0;}
-.field input:focus{border-color: var(--primary);box-shadow: 0 0 0 3px rgba(37,99,235,.12);}
-.actions{display: flex;align-items: center;justify-content: space-between;margin-top: 8px;}
-.btn-primary{height: 42px;padding: 0 16px;border-radius: 10px;border: 1px solid var(--primary);background: var(--primary);color: #fff;font-weight: 600;cursor: pointer;}
-.btn-primary:hover{background: var(--primary-hover);border-color: var(--primary-hover);}
-.link{font-size: 14px;color: var(--primary);text-decoration: none;}
-.link:hover{text-decoration: underline;}
-.footer-note{margin-top: 16px;text-align: center;color: var(--muted);font-size: 12px;}
-.msg{min-height: 20px;margin-bottom: 6px;font-size: 14px;}
-.msg.error{color: var(--danger);}
-.msg.ok{color: green;}
+/* === 登入頁全域設定 === */
+:root {
+  --bg: #f6f7fb;
+  --card: #fff;
+  --text: #222;
+  --muted: #6b7280;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --danger: #b91c1c;
+  --ok: #16a34a;
+  --info-bg: #dbeafe;
+  --info-text: #1e40af;
+  --border: #e5e7eb;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* === 登入卡片區 === */
+.login-wrap {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px 28px 22px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  animation: fadeIn 0.4s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* === 標題 === */
+.app-title {
+  margin: 0 0 6px;
+  font-size: 20px;
+  color: var(--muted);
+  font-weight: 600;
+  text-align: center;
+}
+.card-title {
+  margin: 0 0 20px;
+  font-size: 24px;
+  text-align: center;
+}
+
+/* === 輸入欄位 === */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.field span {
+  font-size: 14px;
+  color: var(--muted);
+}
+.field input {
+  height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.field input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+/* === 登入按鈕與連結 === */
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.btn-primary {
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, filter 0.2s;
+}
+.btn-primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: grayscale(0.2);
+}
+.link {
+  font-size: 14px;
+  color: var(--primary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.link:hover {
+  text-decoration: underline;
+  color: var(--primary-hover);
+}
+
+/* === 底部資訊 === */
+.footer-note {
+  margin-top: 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* === 訊息提示框 === */
+.msg {
+  min-height: 20px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 6px 10px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.msg.show {
+  opacity: 1;
+}
+.msg.error {
+  color: var(--danger);
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+.msg.ok {
+  color: var(--ok);
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+}
+.msg.info {
+  color: var(--info-text);
+  background: var(--info-bg);
+  border: 1px solid #bfdbfe;
+}
+
+/* === 小螢幕微調 === */
+@media (max-width: 480px) {
+  .login-card {
+    padding: 22px 20px 18px;
+    border-radius: 12px;
+  }
+  .card-title {
+    font-size: 20px;
+  }
+  .btn-primary {
+    width: 100%;
+  }
+}

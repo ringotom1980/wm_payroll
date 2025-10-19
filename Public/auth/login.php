@@ -8,6 +8,7 @@ if (is_logged_in()) {
     header('Location: /dashboard');
     exit;
 }
+
 $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT_QUOTES);
 ?>
 <!doctype html>
@@ -16,7 +17,7 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
   <meta charset="utf-8">
   <title><?= $APP_NAME ?>｜登入</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="/assets/css/auth.css" rel="stylesheet">
+  <link href="/assets/css/auth.css?v=2" rel="stylesheet">
 </head>
 <body>
   <main class="login-wrap">
@@ -24,6 +25,7 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
       <h1 class="app-title"><?= $APP_NAME ?></h1>
       <h2 class="card-title">登入</h2>
 
+      <!-- ✅ 登入／登出訊息 -->
       <div id="msg" class="msg" role="alert" aria-live="polite"></div>
 
       <form id="loginForm" autocomplete="on">
@@ -47,6 +49,6 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
     </section>
   </main>
 
-  <script src="/assets/js/auth/login.js"></script>
+  <script src="/assets/js/auth/login.js?v=2"></script>
 </body>
 </html>

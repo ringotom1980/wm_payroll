@@ -1,35 +1,13 @@
 <?php
 // Public/dashboard.php
-// 儀表板：需登入；顯示 KPI、近期異動、以及手動同步政府資料按鈕
-
 $app = require __DIR__ . '/../config/app.php';
 require __DIR__ . '/../config/auth.php';
-
-// 未登入 → 導向登入頁
-if (!is_logged_in()) {
-    header('Location: /auth/login');
-    exit;
-}
-
+if (!is_logged_in()) { header('Location: /auth/login'); exit; }
 $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT_QUOTES);
 ?>
-<!doctype html>
-<html lang="zh-Hant">
-<head>
-  <meta charset="utf-8">
-  <title><?= $APP_NAME ?>｜儀表板</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- 外掛樣式（不得內嵌） -->
-  <link href="/assets/css/app.css" rel="stylesheet">
-</head>
-<body>
-
-<?php
-// 共用頁首與側欄（僅增連結，不改結構）
-require __DIR__ . '/partials/header.php';
-require __DIR__ . '/partials/sidebar.php';
-?>
+<?php require __DIR__ . '/partials/header.php'; ?>
+<?php require __DIR__ . '/partials/sidebar.php'; ?>
 
 <main class="container">
 

@@ -1,18 +1,17 @@
-<?php
-// Public/modules/employees.php
-?>
+<?php // Public/modules/employees.php ?>
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
   <title>員工主檔｜旺苗人員薪資管理</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="/assets/css/app.css" rel="stylesheet">
-  <link href="/assets/css/employees.css?v=3" rel="stylesheet">
+  <link href="/assets/css/app.css?v=5" rel="stylesheet">
+  <link href="/assets/css/employees.css?v=5" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 <body>
   <?php include __DIR__ . '/../partials/header.php'; ?>
-  <div class="layout">
+  <div class="layout" id="layout">
     <?php include __DIR__ . '/../partials/sidebar.php'; ?>
 
     <main class="content">
@@ -25,15 +24,17 @@
         </div>
         <form id="empForm" autocomplete="off">
           <input type="hidden" id="emp_id">
-          <div class="grid two-col">
+
+          <!-- 第1行：姓名、生日、電話、手機、住址 -->
+          <div class="grid row-1">
             <label>姓名<span class="req">*</span>
               <input type="text" id="full_name" placeholder="請輸入姓名">
               <small class="err" data-for="full_name"></small>
             </label>
 
-            <label>入職日<span class="req">*</span>
-              <input type="date" id="hire_date">
-              <small class="err" data-for="hire_date"></small>
+            <label>生日<span class="req">*</span>
+              <input type="date" id="birth_date">
+              <small class="err" data-for="birth_date"></small>
             </label>
 
             <label>電話（市話）
@@ -41,33 +42,59 @@
               <small class="err" data-for="phone"></small>
             </label>
 
-            <label>手機
+            <label>手機<span class="req">*</span>
               <input type="text" id="phone_mobile" placeholder="例：09xx-xxx-xxx">
               <small class="err" data-for="phone_mobile"></small>
             </label>
 
-            <label>地址
+            <label class="span-2">住址<span class="req">*</span>
               <input type="text" id="address" placeholder="請輸入地址">
               <small class="err" data-for="address"></small>
             </label>
+          </div>
 
-            <label>Email
+          <!-- 第2行：電子信箱、緊急聯絡人、連絡電話、聯絡手機、健保眷口數 -->
+          <div class="grid row-2">
+            <label class="span-2">電子信箱
               <input type="email" id="email" placeholder="name@example.com">
               <small class="err" data-for="email"></small>
             </label>
 
-            <label>在職狀況
+            <label>緊急聯絡人<span class="req">*</span>
+              <input type="text" id="emergency_contact_name" placeholder="請輸入姓名">
+              <small class="err" data-for="emergency_contact_name"></small>
+            </label>
+
+            <label>連絡電話
+              <input type="text" id="emergency_contact_phone" placeholder="例：02-xxxxxxx">
+              <small class="err" data-for="emergency_contact_phone"></small>
+            </label>
+
+            <label>聯絡手機<span class="req">*</span>
+              <input type="text" id="emergency_contact_mobile" placeholder="例：09xx-xxx-xxx">
+              <small class="err" data-for="emergency_contact_mobile"></small>
+            </label>
+
+            <label>健保眷口數<span class="req">*</span>
+              <input type="number" id="dependents_count" min="0" step="1" value="0">
+              <small class="err" data-for="dependents_count"></small>
+            </label>
+          </div>
+
+          <!-- 第3行：到職日、在職狀況、預計復職日、離職日 -->
+          <div class="grid row-3">
+            <label>到職日<span class="req">*</span>
+              <input type="date" id="hire_date">
+              <small class="err" data-for="hire_date"></small>
+            </label>
+
+            <label>在職狀況<span class="req">*</span>
               <select id="status">
                 <option value="ACTIVE">在職</option>
                 <option value="LEAVE">留職停薪</option>
                 <option value="RESIGNED">離職</option>
               </select>
               <small class="err" data-for="status"></small>
-            </label>
-
-            <label>健保眷口數
-              <input type="number" id="dependents_count" min="0" step="1" value="0">
-              <small class="err" data-for="dependents_count"></small>
             </label>
 
             <label>預計復職日（限留職停薪時）
@@ -91,7 +118,7 @@
 
       <!-- 中區塊：現職員工列表 -->
       <section class="card">
-        <div class="section-header">
+        <div class="section-header with-gap">
           <h2>現職員工</h2>
           <div class="toolbar">
             <input type="search" id="qActive" placeholder="逐字搜尋：姓名/電話/手機/Email/地址">
@@ -121,7 +148,7 @@
 
       <!-- 下區塊：離職員工列表 -->
       <section class="card">
-        <div class="section-header">
+        <div class="section-header with-gap">
           <h2>離職員工</h2>
           <div class="toolbar">
             <input type="search" id="qResigned" placeholder="逐字搜尋：姓名/電話/手機/Email/地址">
@@ -164,6 +191,6 @@
     </div>
   </div>
 
-  <script src="/assets/js/employees.js?v=3" defer></script>
+  <script src="/assets/js/employees.js?v=5" defer></script>
 </body>
 </html>

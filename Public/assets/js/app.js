@@ -7,12 +7,16 @@
 
   async function fetchJSON(url, opt = {}) {
     const r = await fetch(url, { credentials: 'same-origin', ...opt });
-    const text = await r.text();
+    const text = await r.text(); // 先拿原文
+    if (!r.ok) {
+      console.error(`HTTP ${r.status} @ ${url}\n` + text.slice(0, 400));
+      throw new Error(`HTTP ${r.status}`);
+    }
     try {
-      return JSON.parse(text);
-    } catch (err) {
-      console.error(`Non-JSON from ${url} ↴\n${text.slice(0, 300)}`);
-      throw err;
+      return JSON.parse(text); // 再 parse JSON
+    } catch (e) {
+      console.error(`Non-JSON from ${url} ↴\n` + text.slice(0, 400));
+      throw e;
     }
   }
 

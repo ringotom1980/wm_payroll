@@ -1,0 +1,21 @@
+:root{--bg: #f6f7fb;--card: #fff;--text: #222;--muted: #6b7280;--primary: #2563eb;--primary-hover: #1d4ed8;--danger: #b91c1c;--border: #e5e7eb;}
+*{box-sizing: border-box;}
+body,html{height: 100%;}
+body{margin: 0;font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background: var(--bg);color: var(--text);}
+.login-wrap{min-height: 100%;display: grid;place-items: center;padding: 24px;}
+.login-card{width: 100%;max-width: 420px;background: var(--card);border: 1px solid var(--border);border-radius: 16px;padding: 28px 28px 22px;box-shadow: 0 8px 24px rgba(0,0,0,.06);}
+.app-title{margin: 0 0 6px;font-size: 20px;color: var(--muted);font-weight: 600;text-align: center;}
+.card-title{margin: 0 0 20px;font-size: 24px;text-align: center;}
+.field{display: flex;flex-direction: column;gap: 8px;margin-bottom: 14px;}
+.field span{font-size: 14px;color: var(--muted);}
+.field input{height: 42px;padding: 10px 12px;border: 1px solid var(--border);border-radius: 10px;font-size: 16px;outline: 0;}
+.field input:focus{border-color: var(--primary);box-shadow: 0 0 0 3px rgba(37,99,235,.12);}
+.actions{display: flex;align-items: center;justify-content: space-between;margin-top: 8px;}
+.btn-primary{height: 42px;padding: 0 16px;border-radius: 10px;border: 1px solid var(--primary);background: var(--primary);color: #fff;font-weight: 600;cursor: pointer;}
+.btn-primary:hover{background: var(--primary-hover);border-color: var(--primary-hover);}
+.link{font-size: 14px;color: var(--primary);text-decoration: none;}
+.link:hover{text-decoration: underline;}
+.footer-note{margin-top: 16px;text-align: center;color: var(--muted);font-size: 12px;}
+.msg{min-height: 20px;margin-bottom: 6px;font-size: 14px;}
+.msg.error{color: var(--danger);}
+.msg.ok{color: green;}

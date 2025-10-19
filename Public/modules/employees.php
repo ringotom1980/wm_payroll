@@ -8,7 +8,7 @@
   <title>員工主檔｜旺苗人員薪資管理</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="/assets/css/app.css" rel="stylesheet">
-  <link href="/assets/css/employees.css" rel="stylesheet">
+  <link href="/assets/css/employees.css?v=3" rel="stylesheet">
 </head>
 <body>
   <?php include __DIR__ . '/../partials/header.php'; ?>
@@ -164,6 +164,6 @@
     </div>
   </div>
 
-  <script src="/assets/js/employees.js" defer></script>
+  <script src="/assets/js/employees.js?v=3" defer></script>
 </body>
 </html>

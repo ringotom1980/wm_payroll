@@ -20,14 +20,14 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
 <?php require __DIR__ . '/partials/sidebar.php'; ?>
 
 <main class="container">
-
+<h1 class="page-title">儀表板</h1>
   <!-- 登入者資訊列（app.js 會填入 display_name 並處理登出） -->
-  <section class="row">
+  <!-- <section class="row">
     <div id="authBar" class="auth-bar">
       <span id="userDisplay" class="auth-user">—</span>
       <button id="btnLogout" class="btn-ghost" type="button">登出</button>
     </div>
-  </section>
+  </section> -->
 
   <!-- KPI Cards -->
   <section class="row kpi-grid">

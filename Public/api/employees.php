@@ -87,27 +87,39 @@ if ($action === 'list_active') {
     $where = "$commonWhere AND status IN ('ACTIVE','LEAVE')";
     $params = [];
     if ($q !== '') {
-    $where .= " AND (
-        full_name     LIKE :q ESCAPE '\\' OR
-        phone         LIKE :q ESCAPE '\\' OR
-        phone_mobile  LIKE :q ESCAPE '\\' OR
-        email         LIKE :q ESCAPE '\\' OR
-        address       LIKE :q ESCAPE '\\'
-    )";
-    $params[':q'] = like_q($q); // 仍使用你現有的 like_q()
-}
+        $where .= " AND (
+            full_name     LIKE :q1 ESCAPE '\\' OR
+            phone         LIKE :q2 ESCAPE '\\' OR
+            phone_mobile  LIKE :q3 ESCAPE '\\' OR
+            email         LIKE :q4 ESCAPE '\\' OR
+            address       LIKE :q5 ESCAPE '\\'
+        )";
+        $search = like_q($q);
+        $params = [
+            ':q1' => $search,
+            ':q2' => $search,
+            ':q3' => $search,
+            ':q4' => $search,
+            ':q5' => $search,
+        ];
+    }
 
     $total = (int)scalar($pdo, "SELECT COUNT(*) FROM employees WHERE $where", $params);
     $pages = max(1, (int)ceil($total / $ps));
     $page = min($page, $pages);
     $off = ($page - 1) * $ps;
 
-    $rows = fetch_all($pdo, "SELECT $baseCols FROM employees WHERE $where ORDER BY hire_date DESC, emp_id DESC LIMIT $ps OFFSET $off", $params);
+    $rows = fetch_all(
+        $pdo,
+        "SELECT $baseCols FROM employees WHERE $where
+         ORDER BY hire_date DESC, emp_id DESC LIMIT $ps OFFSET $off",
+        $params
+    );
 
-    // enrich for tenure (today-based)
     foreach ($rows as &$r) {
-        $r['tenure'] = tenure_text($r['hire_date'] ?? null, null); // 現職用今天
-        $r['status_text'] = ($r['status'] === 'ACTIVE') ? '在職' : (($r['status'] === 'LEAVE') ? '留職停薪' : '離職');
+        $r['tenure'] = tenure_text($r['hire_date'] ?? null, null);
+        $r['status_text'] = ($r['status'] === 'ACTIVE') ? '在職'
+            : (($r['status'] === 'LEAVE') ? '留職停薪' : '離職');
     }
     j(true, 'ok', ['data' => $rows, 'page' => $page, 'pages' => $pages, 'total' => $total]);
 }
@@ -120,24 +132,36 @@ if ($action === 'list_resigned') {
     $where = "$commonWhere AND status='RESIGNED'";
     $params = [];
     if ($q !== '') {
-    $where .= " AND (
-        full_name     LIKE :q ESCAPE '\\' OR
-        phone         LIKE :q ESCAPE '\\' OR
-        phone_mobile  LIKE :q ESCAPE '\\' OR
-        email         LIKE :q ESCAPE '\\' OR
-        address       LIKE :q ESCAPE '\\'
-    )";
-    $params[':q'] = like_q($q); // 仍使用你現有的 like_q()
-}
+        $where .= " AND (
+            full_name     LIKE :q1 ESCAPE '\\' OR
+            phone         LIKE :q2 ESCAPE '\\' OR
+            phone_mobile  LIKE :q3 ESCAPE '\\' OR
+            email         LIKE :q4 ESCAPE '\\' OR
+            address       LIKE :q5 ESCAPE '\\'
+        )";
+        $search = like_q($q);
+        $params = [
+            ':q1' => $search,
+            ':q2' => $search,
+            ':q3' => $search,
+            ':q4' => $search,
+            ':q5' => $search,
+        ];
+    }
 
     $total = (int)scalar($pdo, "SELECT COUNT(*) FROM employees WHERE $where", $params);
     $pages = max(1, (int)ceil($total / $ps));
     $page = min($page, $pages);
     $off = ($page - 1) * $ps;
 
-    $rows = fetch_all($pdo, "SELECT $baseCols FROM employees WHERE $where ORDER BY COALESCE(resign_date, hire_date) DESC, emp_id DESC LIMIT $ps OFFSET $off", $params);
+    $rows = fetch_all(
+        $pdo,
+        "SELECT $baseCols FROM employees WHERE $where
+         ORDER BY COALESCE(resign_date, hire_date) DESC, emp_id DESC
+         LIMIT $ps OFFSET $off",
+        $params
+    );
 
-    // enrich for tenure (resign_date-based)
     foreach ($rows as &$r) {
         $end = ($r['resign_date'] ?: (new DateTime('today'))->format('Y-m-d'));
         $r['tenure'] = tenure_text($r['hire_date'] ?? null, $end);
@@ -145,6 +169,7 @@ if ($action === 'list_resigned') {
     }
     j(true, 'ok', ['data' => $rows, 'page' => $page, 'pages' => $pages, 'total' => $total]);
 }
+
 
 if ($action === 'get') {
     $id = (int)($_GET['emp_id'] ?? 0);
@@ -382,10 +407,9 @@ if ($action === 'soft_delete') {
 }
 
 if ($action === 'print') {
-    // 傳回 HTML（固定包含 姓名/電話/地址）
     header('Content-Type: text/html; charset=utf-8');
-    $list = $_POST['list_type'] ?? 'active'; // active|resigned
-    $cols = $_POST['columns'] ?? []; // 其餘可選欄位
+    $list = $_POST['list_type'] ?? 'active';
+    $cols = $_POST['columns'] ?? [];
     $q = trim($_POST['q'] ?? '');
     $company = '旺苗科技工程股份有限公司';
 
@@ -394,11 +418,28 @@ if ($action === 'print') {
     else $where .= " AND status='RESIGNED'";
     $params = [];
     if ($q !== '') {
-        $where .= " AND (full_name LIKE :q OR phone LIKE :q OR phone_mobile LIKE :q OR email LIKE :q OR address LIKE :q)";
-        $params[':q'] = like_q($q);
+        $where .= " AND (
+            full_name     LIKE :q1 ESCAPE '\\' OR
+            phone         LIKE :q2 ESCAPE '\\' OR
+            phone_mobile  LIKE :q3 ESCAPE '\\' OR
+            email         LIKE :q4 ESCAPE '\\' OR
+            address       LIKE :q5 ESCAPE '\\'
+        )";
+        $search = like_q($q);
+        $params = [
+            ':q1' => $search,
+            ':q2' => $search,
+            ':q3' => $search,
+            ':q4' => $search,
+            ':q5' => $search,
+        ];
     }
 
-    $rows = fetch_all($pdo, "SELECT $baseCols FROM employees WHERE $where ORDER BY full_name ASC", $params);
+    $rows = fetch_all(
+        $pdo,
+        "SELECT $baseCols FROM employees WHERE $where ORDER BY full_name ASC",
+        $params
+    );
     // enrich tenure
     foreach ($rows as &$r) {
         $end = ($list === 'resigned') ? ($r['resign_date'] ?: (new DateTime('today'))->format('Y-m-d')) : null;

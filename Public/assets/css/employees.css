@@ -136,30 +136,6 @@ select {
   background: #f8fafc;
 }
 
-/* 刪除按鈕（鮮粉紅） */
-.btn.danger {
-  background: #fde2e2;
-  border-color: #f8b4b4;
-  font-weight: 600;
-}
-.btn.danger:hover {
-  filter: brightness(1.03);
-}
-
-/* 放棄修改（淡粉紅） */
-#btnCancel.btn {
-  background: #fef2f2;
-  border-color: #fde2e2;
-  font-weight: 600;
-}
-#btnCancel.btn:hover {
-  filter: brightness(1.03);
-}
-.btn.small {
-  padding: 4px 8px;
-  font-size: 12px;
-  border-radius: 6px;
-}
 .table-wrap {
   overflow: auto;
 }

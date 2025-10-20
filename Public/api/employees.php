@@ -87,9 +87,15 @@ if ($action === 'list_active') {
     $where = "$commonWhere AND status IN ('ACTIVE','LEAVE')";
     $params = [];
     if ($q !== '') {
-        $where .= " AND (full_name LIKE :q OR phone LIKE :q OR phone_mobile LIKE :q OR email LIKE :q OR address LIKE :q)";
-        $params[':q'] = like_q($q);
-    }
+    $where .= " AND (
+        full_name     LIKE :q ESCAPE '\\' OR
+        phone         LIKE :q ESCAPE '\\' OR
+        phone_mobile  LIKE :q ESCAPE '\\' OR
+        email         LIKE :q ESCAPE '\\' OR
+        address       LIKE :q ESCAPE '\\'
+    )";
+    $params[':q'] = like_q($q); // 仍使用你現有的 like_q()
+}
 
     $total = (int)scalar($pdo, "SELECT COUNT(*) FROM employees WHERE $where", $params);
     $pages = max(1, (int)ceil($total / $ps));
@@ -114,9 +120,15 @@ if ($action === 'list_resigned') {
     $where = "$commonWhere AND status='RESIGNED'";
     $params = [];
     if ($q !== '') {
-        $where .= " AND (full_name LIKE :q OR phone LIKE :q OR phone_mobile LIKE :q OR email LIKE :q OR address LIKE :q)";
-        $params[':q'] = like_q($q);
-    }
+    $where .= " AND (
+        full_name     LIKE :q ESCAPE '\\' OR
+        phone         LIKE :q ESCAPE '\\' OR
+        phone_mobile  LIKE :q ESCAPE '\\' OR
+        email         LIKE :q ESCAPE '\\' OR
+        address       LIKE :q ESCAPE '\\'
+    )";
+    $params[':q'] = like_q($q); // 仍使用你現有的 like_q()
+}
 
     $total = (int)scalar($pdo, "SELECT COUNT(*) FROM employees WHERE $where", $params);
     $pages = max(1, (int)ceil($total / $ps));

@@ -291,7 +291,7 @@ a:hover {
   border: 1px solid #cbd5e1;
   background: #f8fafc;
   color: #1f2937;
-  font-weight: 400;
+  font-weight: 500;
   font-family: inherit;
   font-size: 14px;
   line-height: 1.4;
@@ -345,7 +345,7 @@ a:hover {
   background: #fde2e2;
   border-color: #f8b4b4;
   color: #9f1239;
-  font-weight: 400; /* 保留刪除按鈕為粗體 */
+  font-weight: 500; /* 保留刪除按鈕為粗體 */
 }
 
 /* 小尺寸按鈕 */
@@ -356,7 +356,7 @@ a:hover {
 }
 
 button {
-  font-weight: 400;
+  font-weight: 500;
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
@@ -365,7 +365,7 @@ button {
   background: #fef2f2;
   border-color: #fde2e2;
   color: #9f1239;
-  font-weight: 400;
+  font-weight: 500;
 }
 #btnCancel.btn:hover {
   filter: brightness(1.02);

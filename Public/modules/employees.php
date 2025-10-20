@@ -229,7 +229,8 @@
             </div>
         </div>
     </div>
-    <script src="/assets/js/app.js?v=13" defer></script>
+    <?php require __DIR__ . '/partials/footer.php'; ?>
+    <script src="/assets/js/app.js?v=4" defer></script>
     <script src="/assets/js/employees.js?v=8" defer></script>
 </body>
 

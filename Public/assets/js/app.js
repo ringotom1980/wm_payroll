@@ -38,7 +38,7 @@
   }
 
   function bindLogout() {
-    const btn = $('#btnLogout');
+    const btn = $('#topLogout');
     if (!btn) return;
     btn.addEventListener('click', async () => {
       try {

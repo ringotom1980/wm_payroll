@@ -154,196 +154,204 @@ if ($action === 'check_dupe') {
 
 /* ===================== create ===================== */
 if ($action === 'create') {
-  // ---- 讀取與基本整理 ----
-  $full_name = trim($_POST['full_name'] ?? '');
-  $birth_date = trim($_POST['birth_date'] ?? '');
-  $phone = trim($_POST['phone'] ?? '');
-  $phone_mobile = trim($_POST['phone_mobile'] ?? '');
-  $address = trim($_POST['address'] ?? '');
-  $email = trim($_POST['email'] ?? '');
+    // ---- 讀取與基本整理 ----
+    $full_name = trim($_POST['full_name'] ?? '');
+    $birth_date = trim($_POST['birth_date'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
+    $phone_mobile = trim($_POST['phone_mobile'] ?? '');
+    $address = trim($_POST['address'] ?? '');
+    $email = trim($_POST['email'] ?? '');
 
-  $emg_name = trim($_POST['emergency_contact_name'] ?? '');
-  $emg_phone = trim($_POST['emergency_contact_phone'] ?? '');
-  $emg_mobile = trim($_POST['emergency_contact_mobile'] ?? '');
+    $emg_name = trim($_POST['emergency_contact_name'] ?? '');
+    $emg_phone = trim($_POST['emergency_contact_phone'] ?? '');
+    $emg_mobile = trim($_POST['emergency_contact_mobile'] ?? '');
 
-  $hire_date = trim($_POST['hire_date'] ?? '');
-  $status = $_POST['status'] ?? 'ACTIVE';
-  $dependents_count = (int)($_POST['dependents_count'] ?? 0);
-  $expected_return_date = trim($_POST['expected_return_date'] ?? '');
-  $resign_date = trim($_POST['resign_date'] ?? '');
+    $hire_date = trim($_POST['hire_date'] ?? '');
+    $status = $_POST['status'] ?? 'ACTIVE';
+    $dependents_count = (int)($_POST['dependents_count'] ?? 0);
+    $expected_return_date = trim($_POST['expected_return_date'] ?? '');
+    $resign_date = trim($_POST['resign_date'] ?? '');
 
-  // ---- 必填與基本規則驗證 ----
-  $today = (new DateTime('today'))->format('Y-m-d');
-  $invalid = [];
+    // ---- 必填與基本規則驗證 ----
+    $today = (new DateTime('today'))->format('Y-m-d');
+    $invalid = [];
 
-  // 必填：姓名、生日、手機、住址、緊急聯絡人、聯絡手機、健保眷口數、到職日、在職狀況
-  if ($full_name === '') $invalid['full_name'] = '必填';
-  if ($birth_date === '') $invalid['birth_date'] = '必填';
-  if ($phone_mobile === '') $invalid['phone_mobile'] = '必填';
-  if ($address === '') $invalid['address'] = '必填';
-  if ($emg_name === '') $invalid['emergency_contact_name'] = '必填';
-  if ($emg_mobile === '') $invalid['emergency_contact_mobile'] = '必填';
-  if ($hire_date === '') $invalid['hire_date'] = '必填';
-  if ($status === '') $invalid['status'] = '必填';
-  if ($dependents_count < 0) $invalid['dependents_count'] = '必須≥0';
+    // 必填：姓名、生日、手機、住址、緊急聯絡人、聯絡手機、健保眷口數、到職日、在職狀況
+    if ($full_name === '') $invalid['full_name'] = '必填';
+    if ($birth_date === '') $invalid['birth_date'] = '必填';
+    if ($phone_mobile === '') $invalid['phone_mobile'] = '必填';
+    if ($address === '') $invalid['address'] = '必填';
+    if ($emg_name === '') $invalid['emergency_contact_name'] = '必填';
+    if ($emg_mobile === '') $invalid['emergency_contact_mobile'] = '必填';
+    if ($hire_date === '') $invalid['hire_date'] = '必填';
+    if ($status === '') $invalid['status'] = '必填';
+    if ($dependents_count < 0) $invalid['dependents_count'] = '必須≥0';
 
-  // 日期不可晚於今天（生日 / 到職 / 預計復職 / 離職）
-  foreach (['birth_date','hire_date','expected_return_date','resign_date'] as $k) {
-    $v = $$k ?? '';
-    if ($v !== '' && $v > $today) $invalid[$k] = '不可晚於今天';
-  }
+    // 日期不可晚於今天（生日 / 到職 / 預計復職 / 離職）
+    foreach (['birth_date', 'hire_date', 'expected_return_date', 'resign_date'] as $k) {
+        $v = $$k ?? '';
+        if ($v !== '' && $v > $today) $invalid[$k] = '不可晚於今天';
+    }
 
-  // 狀態聯動：非 LEAVE -> 清空預計復職日；非 RESIGNED -> 清空離職日
-  if ($status !== 'LEAVE') $expected_return_date = '';
-  if ($status !== 'RESIGNED') $resign_date = '';
+    // 狀態聯動：非 LEAVE -> 清空預計復職日；非 RESIGNED -> 清空離職日
+    if ($status !== 'LEAVE') $expected_return_date = '';
+    if ($status !== 'RESIGNED') $resign_date = '';
 
-  if (!empty($invalid)) {
-    j(false, '請修正欄位錯誤', ['invalid_fields' => $invalid]);
-  }
+    if (!empty($invalid)) {
+        j(false, '請修正欄位錯誤', ['invalid_fields' => $invalid]);
+    }
 
-  // ---- 單欄驗重（只檢查未刪除資料）----
-  $dupes = [];
-  if ($full_name !== '' && scalar($pdo, "SELECT 1 FROM employees WHERE is_deleted=0 AND full_name=:v LIMIT 1", [':v' => $full_name])) $dupes['full_name'] = '已有相同姓名';
-  if ($phone !== '' && scalar($pdo, "SELECT 1 FROM employees WHERE is_deleted=0 AND phone=:v LIMIT 1", [':v' => $phone])) $dupes['phone'] = '已有相同電話';
-  if ($phone_mobile !== '' && scalar($pdo, "SELECT 1 FROM employees WHERE is_deleted=0 AND phone_mobile=:v LIMIT 1", [':v' => $phone_mobile])) $dupes['phone_mobile'] = '已有相同手機';
-  if ($email !== '' && scalar($pdo, "SELECT 1 FROM employees WHERE is_deleted=0 AND email=:v LIMIT 1", [':v' => $email])) $dupes['email'] = '已有相同 Email';
-  if ($dupes) {
-    j(false, '欄位重複，無法新增', ['invalid_fields' => $dupes]);
-  }
+    // ---- 單欄驗重（只檢查未刪除資料）----
+    $dupes = [];
+    if ($full_name !== '' && scalar($pdo, "SELECT 1 FROM employees WHERE is_deleted=0 AND full_name=:v LIMIT 1", [':v' => $full_name])) $dupes['full_name'] = '已有相同姓名';
+    if ($phone !== '' && scalar($pdo, "SELECT 1 FROM employees WHERE is_deleted=0 AND phone=:v LIMIT 1", [':v' => $phone])) $dupes['phone'] = '已有相同電話';
+    if ($phone_mobile !== '' && scalar($pdo, "SELECT 1 FROM employees WHERE is_deleted=0 AND phone_mobile=:v LIMIT 1", [':v' => $phone_mobile])) $dupes['phone_mobile'] = '已有相同手機';
+    if ($email !== '' && scalar($pdo, "SELECT 1 FROM employees WHERE is_deleted=0 AND email=:v LIMIT 1", [':v' => $email])) $dupes['email'] = '已有相同 Email';
+    if ($dupes) {
+        j(false, '欄位重複，無法新增', ['invalid_fields' => $dupes]);
+    }
 
-  // ---- 寫入 ----
-  $sql = "INSERT INTO employees (
-            emp_no, full_name, birth_date,
-            phone, phone_mobile, address, email,
-            emergency_contact_name, emergency_contact_phone, emergency_contact_mobile,
-            hire_date, resign_date, status,
-            dependents_count, expected_return_date,
-            is_deleted, created_at, updated_at
-          ) VALUES (
-            '', :full_name, :birth_date,
-            :phone, :phone_mobile, :address, :email,
-            :emg_name, :emg_phone, :emg_mobile,
-            :hire_date, :resign_date, :status,
-            :dependents_count, :expected_return_date,
-            0, NOW(), NOW()
-          )";
+    // ---- 寫入 ----
+    $sql = "INSERT INTO employees (
+  emp_no, full_name, birth_date,
+  phone, phone_mobile, address, email,
+  emergency_contact_name, emergency_contact_phone, emergency_contact_mobile,
+  hire_date, resign_date, status,
+  dependents_count, expected_return_date,
+  is_deleted, created_at, updated_at
+) VALUES (
+  :emp_no, :full_name, :birth_date,
+  :phone, :phone_mobile, :address, :email,
+  :emg_name, :emg_phone, :emg_mobile,
+  :hire_date, :resign_date, :status,
+  :dependents_count, :expected_return_date,
+  0, NOW(), NOW()
+)";
 
-  $st = $pdo->prepare($sql);
-  $st->execute([
-    ':full_name' => $full_name,
-    ':birth_date' => ($birth_date ?: null),
-    ':phone' => $phone,
-    ':phone_mobile' => $phone_mobile,
-    ':address' => $address,
-    ':email' => $email,
-    ':emg_name' => $emg_name,
-    ':emg_phone' => $emg_phone,
-    ':emg_mobile' => $emg_mobile,
-    ':hire_date' => $hire_date,
-    ':resign_date' => ($status === 'RESIGNED' ? ($resign_date ?: null) : null),
-    ':status' => $status,
-    ':dependents_count' => $dependents_count,
-    ':expected_return_date' => ($status === 'LEAVE' ? ($expected_return_date ?: null) : null),
-  ]);
+    try {
+        $st = $pdo->prepare($sql);
+        $st->execute([
+            ':emp_no' => null, // 關鍵：不要用空字串
+            ':full_name' => $full_name,
+            ':birth_date' => ($birth_date ?: null),
+            ':phone' => $phone,
+            ':phone_mobile' => $phone_mobile,
+            ':address' => $address,
+            ':email' => $email,
+            ':emg_name' => $emg_name,
+            ':emg_phone' => $emg_phone,
+            ':emg_mobile' => $emg_mobile,
+            ':hire_date' => $hire_date,
+            ':resign_date' => ($status === 'RESIGNED' ? ($resign_date ?: null) : null),
+            ':status' => $status,
+            ':dependents_count' => $dependents_count,
+            ':expected_return_date' => ($status === 'LEAVE' ? ($expected_return_date ?: null) : null),
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        j(false, 'DB 錯誤：' . $e->getMessage());
+    }
 
-  j(true, '新增完成', ['emp_id' => (int)$pdo->lastInsertId()]);
+    j(true, '新增完成', ['emp_id' => (int)$pdo->lastInsertId()]);
 }
 
 /* ===================== update ===================== */
 if ($action === 'update') {
-  $emp_id = (int)($_POST['emp_id'] ?? 0);
-  if ($emp_id <= 0) j(false, 'emp_id 無效');
+    $emp_id = (int)($_POST['emp_id'] ?? 0);
+    if ($emp_id <= 0) j(false, 'emp_id 無效');
 
-  // 確認存在且未被軟刪
-  $row = fetch_one($pdo, "SELECT emp_id FROM employees WHERE emp_id=:id AND is_deleted=0", [':id' => $emp_id]);
-  if (!$row) j(false, '查無資料或已刪除');
+    // 確認存在且未被軟刪
+    $row = fetch_one($pdo, "SELECT emp_id FROM employees WHERE emp_id=:id AND is_deleted=0", [':id' => $emp_id]);
+    if (!$row) j(false, '查無資料或已刪除');
 
-  // ---- 讀取與基本整理 ----
-  $full_name = trim($_POST['full_name'] ?? '');
-  $birth_date = trim($_POST['birth_date'] ?? '');
-  $phone = trim($_POST['phone'] ?? '');
-  $phone_mobile = trim($_POST['phone_mobile'] ?? '');
-  $address = trim($_POST['address'] ?? '');
-  $email = trim($_POST['email'] ?? '');
+    // ---- 讀取與基本整理 ----
+    $full_name = trim($_POST['full_name'] ?? '');
+    $birth_date = trim($_POST['birth_date'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
+    $phone_mobile = trim($_POST['phone_mobile'] ?? '');
+    $address = trim($_POST['address'] ?? '');
+    $email = trim($_POST['email'] ?? '');
 
-  $emg_name = trim($_POST['emergency_contact_name'] ?? '');
-  $emg_phone = trim($_POST['emergency_contact_phone'] ?? '');
-  $emg_mobile = trim($_POST['emergency_contact_mobile'] ?? '');
+    $emg_name = trim($_POST['emergency_contact_name'] ?? '');
+    $emg_phone = trim($_POST['emergency_contact_phone'] ?? '');
+    $emg_mobile = trim($_POST['emergency_contact_mobile'] ?? '');
 
-  $hire_date = trim($_POST['hire_date'] ?? '');
-  $status = $_POST['status'] ?? 'ACTIVE';
-  $dependents_count = (int)($_POST['dependents_count'] ?? 0);
-  $expected_return_date = trim($_POST['expected_return_date'] ?? '');
-  $resign_date = trim($_POST['resign_date'] ?? '');
+    $hire_date = trim($_POST['hire_date'] ?? '');
+    $status = $_POST['status'] ?? 'ACTIVE';
+    $dependents_count = (int)($_POST['dependents_count'] ?? 0);
+    $expected_return_date = trim($_POST['expected_return_date'] ?? '');
+    $resign_date = trim($_POST['resign_date'] ?? '');
 
-  // ---- 必填與基本規則驗證 ----
-  $today = (new DateTime('today'))->format('Y-m-d');
-  $invalid = [];
+    // ---- 必填與基本規則驗證 ----
+    $today = (new DateTime('today'))->format('Y-m-d');
+    $invalid = [];
 
-  if ($full_name === '') $invalid['full_name'] = '必填';
-  if ($birth_date === '') $invalid['birth_date'] = '必填';
-  if ($phone_mobile === '') $invalid['phone_mobile'] = '必填';
-  if ($address === '') $invalid['address'] = '必填';
-  if ($emg_name === '') $invalid['emergency_contact_name'] = '必填';
-  if ($emg_mobile === '') $invalid['emergency_contact_mobile'] = '必填';
-  if ($hire_date === '') $invalid['hire_date'] = '必填';
-  if ($status === '') $invalid['status'] = '必填';
-  if ($dependents_count < 0) $invalid['dependents_count'] = '必須≥0';
+    if ($full_name === '') $invalid['full_name'] = '必填';
+    if ($birth_date === '') $invalid['birth_date'] = '必填';
+    if ($phone_mobile === '') $invalid['phone_mobile'] = '必填';
+    if ($address === '') $invalid['address'] = '必填';
+    if ($emg_name === '') $invalid['emergency_contact_name'] = '必填';
+    if ($emg_mobile === '') $invalid['emergency_contact_mobile'] = '必填';
+    if ($hire_date === '') $invalid['hire_date'] = '必填';
+    if ($status === '') $invalid['status'] = '必填';
+    if ($dependents_count < 0) $invalid['dependents_count'] = '必須≥0';
 
-  foreach (['birth_date','hire_date','expected_return_date','resign_date'] as $k) {
-    $v = $$k ?? '';
-    if ($v !== '' && $v > $today) $invalid[$k] = '不可晚於今天';
-  }
+    foreach (['birth_date', 'hire_date', 'expected_return_date', 'resign_date'] as $k) {
+        $v = $$k ?? '';
+        if ($v !== '' && $v > $today) $invalid[$k] = '不可晚於今天';
+    }
 
-  // 狀態聯動處理
-  if ($status !== 'LEAVE') $expected_return_date = '';
-  if ($status !== 'RESIGNED') $resign_date = '';
+    // 狀態聯動處理
+    if ($status !== 'LEAVE') $expected_return_date = '';
+    if ($status !== 'RESIGNED') $resign_date = '';
 
-  if (!empty($invalid)) {
-    j(false, '請修正欄位錯誤', ['invalid_fields' => $invalid]);
-  }
+    if (!empty($invalid)) {
+        j(false, '請修正欄位錯誤', ['invalid_fields' => $invalid]);
+    }
 
-  // （設計決策）update 不做重複擋，只做資料更新。若要擋，複用 create 的驗重邏輯即可。
+    // （設計決策）update 不做重複擋，只做資料更新。若要擋，複用 create 的驗重邏輯即可。
 
-  // ---- 寫入 ----
-  $sql = "UPDATE employees SET
-            full_name=:full_name,
-            birth_date=:birth_date,
-            phone=:phone,
-            phone_mobile=:phone_mobile,
-            address=:address,
-            email=:email,
-            emergency_contact_name=:emg_name,
-            emergency_contact_phone=:emg_phone,
-            emergency_contact_mobile=:emg_mobile,
-            hire_date=:hire_date,
-            resign_date=:resign_date,
-            status=:status,
-            dependents_count=:dependents_count,
-            expected_return_date=:expected_return_date,
-            updated_at=NOW()
-          WHERE emp_id=:emp_id AND is_deleted=0";
+    // ---- 寫入 ----
+    $sql = "UPDATE employees SET
+          emp_no=:emp_no,
+          full_name=:full_name,
+          birth_date=:birth_date,
+          phone=:phone,
+          phone_mobile=:phone_mobile,
+          address=:address,
+          email=:email,
+          emergency_contact_name=:emg_name,
+          emergency_contact_phone=:emg_phone,
+          emergency_contact_mobile=:emg_mobile,
+          hire_date=:hire_date,
+          resign_date=:resign_date,
+          status=:status,
+          dependents_count=:dependents_count,
+          expected_return_date=:expected_return_date,
+          updated_at=NOW()
+        WHERE emp_id=:emp_id AND is_deleted=0";
+    $st = $pdo->prepare($sql);
+    $st->execute([
+        ':emp_id' => $emp_id,
+        ':emp_no' => null, // ⬅ 關鍵，不再塞空字串
+        ':full_name' => $full_name,
+        ':birth_date' => ($birth_date ?: null),
+        ':phone' => $phone,
+        ':phone_mobile' => $phone_mobile,
+        ':address' => $address,
+        ':email' => $email,
+        ':emg_name' => $emg_name,
+        ':emg_phone' => $emg_phone,
+        ':emg_mobile' => $emg_mobile,
+        ':hire_date' => $hire_date,
+        ':resign_date' => ($status === 'RESIGNED' ? ($resign_date ?: null) : null),
+        ':status' => $status,
+        ':dependents_count' => $dependents_count,
+        ':expected_return_date' => ($status === 'LEAVE' ? ($expected_return_date ?: null) : null),
+    ]);
 
-  $st = $pdo->prepare($sql);
-  $st->execute([
-    ':emp_id' => $emp_id,
-    ':full_name' => $full_name,
-    ':birth_date' => ($birth_date ?: null),
-    ':phone' => $phone,
-    ':phone_mobile' => $phone_mobile,
-    ':address' => $address,
-    ':email' => $email,
-    ':emg_name' => $emg_name,
-    ':emg_phone' => $emg_phone,
-    ':emg_mobile' => $emg_mobile,
-    ':hire_date' => $hire_date,
-    ':resign_date' => ($status === 'RESIGNED' ? ($resign_date ?: null) : null),
-    ':status' => $status,
-    ':dependents_count' => $dependents_count,
-    ':expected_return_date' => ($status === 'LEAVE' ? ($expected_return_date ?: null) : null),
-  ]);
 
-  j(true, '已更新');
+    j(true, '已更新');
 }
 
 if ($action === 'soft_delete') {

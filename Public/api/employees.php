@@ -87,15 +87,21 @@ if ($action === 'list_active') {
     $where = "$commonWhere AND status IN ('ACTIVE','LEAVE')";
     $params = [];
     if ($q !== '') {
-    $where .= " AND (
-        full_name     LIKE :q ESCAPE '\\' OR
-        phone         LIKE :q ESCAPE '\\' OR
-        phone_mobile  LIKE :q ESCAPE '\\' OR
-        email         LIKE :q ESCAPE '\\' OR
-        address       LIKE :q ESCAPE '\\'
+        $where .= " AND (
+        full_name    COLLATE utf8mb4_general_ci LIKE :q1 ESCAPE '\\' OR
+        phone        LIKE :q2 ESCAPE '\\' OR
+        phone_mobile LIKE :q3 ESCAPE '\\' OR
+        email        COLLATE utf8mb4_general_ci LIKE :q4 ESCAPE '\\' OR
+        address      COLLATE utf8mb4_general_ci LIKE :q5 ESCAPE '\\'
     )";
-    $params[':q'] = like_q($q); // 仍使用你現有的 like_q()
-}
+        $search = like_q($q);
+        $params[':q1'] = $search;
+        $params[':q2'] = $search;
+        $params[':q3'] = $search;
+        $params[':q4'] = $search;
+        $params[':q5'] = $search;
+    }
+
 
     $total = (int)scalar($pdo, "SELECT COUNT(*) FROM employees WHERE $where", $params);
     $pages = max(1, (int)ceil($total / $ps));
@@ -120,15 +126,21 @@ if ($action === 'list_resigned') {
     $where = "$commonWhere AND status='RESIGNED'";
     $params = [];
     if ($q !== '') {
-    $where .= " AND (
-        full_name     LIKE :q ESCAPE '\\' OR
-        phone         LIKE :q ESCAPE '\\' OR
-        phone_mobile  LIKE :q ESCAPE '\\' OR
-        email         LIKE :q ESCAPE '\\' OR
-        address       LIKE :q ESCAPE '\\'
+        $where .= " AND (
+        full_name    COLLATE utf8mb4_general_ci LIKE :q1 ESCAPE '\\' OR
+        phone        LIKE :q2 ESCAPE '\\' OR
+        phone_mobile LIKE :q3 ESCAPE '\\' OR
+        email        COLLATE utf8mb4_general_ci LIKE :q4 ESCAPE '\\' OR
+        address      COLLATE utf8mb4_general_ci LIKE :q5 ESCAPE '\\'
     )";
-    $params[':q'] = like_q($q); // 仍使用你現有的 like_q()
-}
+        $search = like_q($q);
+        $params[':q1'] = $search;
+        $params[':q2'] = $search;
+        $params[':q3'] = $search;
+        $params[':q4'] = $search;
+        $params[':q5'] = $search;
+    }
+
 
     $total = (int)scalar($pdo, "SELECT COUNT(*) FROM employees WHERE $where", $params);
     $pages = max(1, (int)ceil($total / $ps));
@@ -394,9 +406,21 @@ if ($action === 'print') {
     else $where .= " AND status='RESIGNED'";
     $params = [];
     if ($q !== '') {
-        $where .= " AND (full_name LIKE :q OR phone LIKE :q OR phone_mobile LIKE :q OR email LIKE :q OR address LIKE :q)";
-        $params[':q'] = like_q($q);
+        $where .= " AND (
+        full_name    COLLATE utf8mb4_general_ci LIKE :q1 ESCAPE '\\' OR
+        phone        LIKE :q2 ESCAPE '\\' OR
+        phone_mobile LIKE :q3 ESCAPE '\\' OR
+        email        COLLATE utf8mb4_general_ci LIKE :q4 ESCAPE '\\' OR
+        address      COLLATE utf8mb4_general_ci LIKE :q5 ESCAPE '\\'
+    )";
+        $search = like_q($q);
+        $params[':q1'] = $search;
+        $params[':q2'] = $search;
+        $params[':q3'] = $search;
+        $params[':q4'] = $search;
+        $params[':q5'] = $search;
     }
+
 
     $rows = fetch_all($pdo, "SELECT $baseCols FROM employees WHERE $where ORDER BY full_name ASC", $params);
     // enrich tenure

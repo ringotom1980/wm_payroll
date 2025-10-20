@@ -131,6 +131,5 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
 </main>
 
 <?php require __DIR__ . '/partials/footer.php'; ?>
-<script src="/assets/js/app.js?v=4" defer></script>
 </body>
 </html>

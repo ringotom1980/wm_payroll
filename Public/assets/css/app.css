@@ -280,64 +280,87 @@ a:hover {
   justify-content: flex-end;
   margin-top: 12px;
 }
+/* === 全站統一按鈕樣式（優化字重與平滑度） === */
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: var(--brand);
-  color: #fff;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #1f2937;
   font-weight: 400;
   font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
+  font-size: 14px;
+  line-height: 1.4;
   cursor: pointer;
-  transition: filter 0.2s, transform 20ms, background 0.2s;
+  transition: filter 0.2s, transform 0.02s, background 0.2s;
+
+  /* 讓字體變細緻 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
 .btn:hover {
   filter: brightness(1.05);
 }
+
 .btn:active {
   transform: translateY(1px);
 }
+
 .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* 主按鈕 */
 .btn.primary {
-  background: var(--brand);
+  background: #0ea5e9;
+  border-color: #0284c7;
+  color: #fff;
 }
+
+/* 次要按鈕（白底） */
 .btn.secondary {
   background: #fff;
-  color: #0f172a;
+  border-color: #cbd5e1;
+  color: #1f2937;
 }
-.btn-ghost,
+
+/* 透明邊框按鈕 */
 .btn.ghost {
-  background: 0 0;
-  color: var(--ink);
-  border: 1px solid var(--line);
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  color: #374151;
 }
-.btn-ghost:hover,
 .btn.ghost:hover {
   background: #f8fafc;
 }
+
+/* 危險按鈕（刪除） */
 .btn.danger {
   background: #fde2e2;
   border-color: #f8b4b4;
-  color: #b91c1c;
-  font-weight: 400;
+  font-weight: 600; /* 保留刪除按鈕為粗體 */
 }
-.btn.danger:hover {
-  filter: brightness(1.03);
+
+/* 放棄修改（淡粉紅） */
+#btnCancel.btn {
+  background: #fef2f2;
+  border-color: #fde2e2;
+  font-weight: 600; /* 放棄修改維持粗體 */
 }
+
+/* 小尺寸按鈕 */
 .btn.small {
   padding: 4px 8px;
   font-size: 12px;
-  border-radius: 8px;
-  font-weight: 400;
+  border-radius: 6px;
 }
+
 button {
   font-weight: 400;
   font-family: inherit;

@@ -230,7 +230,7 @@
         </div>
     </div>
 
-    <script src="/assets/js/employees.js?v=7" defer></script>
+    <script src="/assets/js/employees.js?v=8" defer></script>
 </body>
 
 </html>

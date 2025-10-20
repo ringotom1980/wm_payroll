@@ -5,7 +5,17 @@ require __DIR__ . '/../config/auth.php';
 if (!is_logged_in()) { header('Location: /auth/login'); exit; }
 $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT_QUOTES);
 ?>
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><?php echo $APP_NAME; ?>｜儀表板</title>
 
+  <!-- ✅ 全站共用樣式 -->
+  <link href="/assets/css/app.css?v=13" rel="stylesheet">
+</head>
+<body>
 <?php require __DIR__ . '/partials/header.php'; ?>
 <?php require __DIR__ . '/partials/sidebar.php'; ?>
 

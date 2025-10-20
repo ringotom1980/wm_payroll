@@ -7,7 +7,7 @@
     <meta charset="utf-8">
     <title>員工主檔｜旺苗人員薪資管理</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- <link href="/assets/css/app.css?v=11" rel="stylesheet"> -->
+    <link href="/assets/css/app.css?v=11" rel="stylesheet">
     <link href="/assets/css/employees.css?v=11" rel="stylesheet">
     <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>

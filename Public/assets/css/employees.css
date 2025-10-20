@@ -214,3 +214,19 @@ select {
     grid-template-columns: repeat(2, minmax(140px, 1fr));
   }
 }
+
+
+/* 只讓「現職/離職」兩張表置中，不動到其他表格 */
+#tblActive th,
+#tblActive td,
+#tblResigned th,
+#tblResigned td {
+  text-align: center !important;
+}
+
+/* 讓序號/操作欄寬度與置中更俐落 */
+#tblActive .op-col,
+#tblResigned .op-col {
+  text-align: center !important;
+  width: 90px;
+}

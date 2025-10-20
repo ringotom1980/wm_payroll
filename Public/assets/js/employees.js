@@ -478,20 +478,23 @@
       loadResigned();
     }
   });
-  els.qActive.addEventListener(
-    'input',
-    debounce(() => {
-      activePage = 1;
-      loadActive();
-    }, 220),
-  );
-  els.qResigned.addEventListener(
-    'input',
-    debounce(() => {
-      resignedPage = 1;
-      loadResigned();
-    }, 220),
-  );
+
+  // ---- 動態搜尋（支援打字即查、清除鍵、貼上/刪除）----
+  const liveFilterActive = debounce(() => { activePage = 1; loadActive(); }, 220);
+  const liveFilterResigned = debounce(() => { resignedPage = 1; loadResigned(); }, 220);
+
+  // input：一般打字
+  els.qActive.addEventListener('input', liveFilterActive);
+  els.qResigned.addEventListener('input', liveFilterResigned);
+
+  // search：點搜尋框右側「×」清除時會觸發
+  els.qActive.addEventListener('search', () => { activePage = 1; loadActive(); });
+  els.qResigned.addEventListener('search', () => { resignedPage = 1; loadResigned(); });
+
+  // change（保險起見）：有些瀏覽器在自動填入/貼上時只觸發 change
+  els.qActive.addEventListener('change', liveFilterActive);
+  els.qResigned.addEventListener('change', liveFilterResigned);
+
 
   // 初始化
   updateFormLocks();

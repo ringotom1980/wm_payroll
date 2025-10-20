@@ -51,18 +51,24 @@ function in_today_or($dateStr, $fallback): string
 }
 
 /** tenure text */
-function tenure_text(string $from, ?string $to = null): string
+function tenure_text(?string $from, ?string $to = null): string
 {
-    $start = new DateTime($from);
-    $end = $to ? new DateTime($to) : new DateTime('today');
-    if ($end < $start) $end = $start;
-    $diff = $start->diff($end);
-    $parts = [];
-    if ($diff->y) $parts[] = $diff->y . ' 年';
-    if ($diff->m) $parts[] = $diff->m . ' 個月';
-    if (!$parts) $parts[] = $diff->d . ' 天';
-    return implode(' ', $parts);
+    if (!$from) return ''; // 沒起始日就不計算
+    try {
+        $start = new DateTime($from);
+        $end = $to ? new DateTime($to) : new DateTime('today');
+        if ($end < $start) $end = $start;
+        $diff = $start->diff($end);
+        $parts = [];
+        if ($diff->y) $parts[] = $diff->y . ' 年';
+        if ($diff->m) $parts[] = $diff->m . ' 個月';
+        if (!$parts) $parts[] = $diff->d . ' 天';
+        return implode(' ', $parts);
+    } catch (Throwable $e) {
+        return ''; // 任意解析失敗都回空字串，避免 500
+    }
 }
+
 
 /** columns whitelist for select */
 $baseCols = "emp_id, emp_no, full_name, birth_date, phone, phone_mobile, address, email,
@@ -94,7 +100,7 @@ if ($action === 'list_active') {
 
     // enrich for tenure (today-based)
     foreach ($rows as &$r) {
-        $r['tenure'] = tenure_text($r['hire_date'], null); // 現職用今天
+        $r['tenure'] = tenure_text($r['hire_date'] ?? null, null); // 現職用今天
         $r['status_text'] = ($r['status'] === 'ACTIVE') ? '在職' : (($r['status'] === 'LEAVE') ? '留職停薪' : '離職');
     }
     j(true, 'ok', ['data' => $rows, 'page' => $page, 'pages' => $pages, 'total' => $total]);
@@ -121,8 +127,8 @@ if ($action === 'list_resigned') {
 
     // enrich for tenure (resign_date-based)
     foreach ($rows as &$r) {
-        $end = $r['resign_date'] ?: (new DateTime('today'))->format('Y-m-d');
-        $r['tenure'] = tenure_text($r['hire_date'], $end);
+        $end = ($r['resign_date'] ?: (new DateTime('today'))->format('Y-m-d'));
+        $r['tenure'] = tenure_text($r['hire_date'] ?? null, $end);
         $r['status_text'] = '離職';
     }
     j(true, 'ok', ['data' => $rows, 'page' => $page, 'pages' => $pages, 'total' => $total]);

@@ -345,7 +345,7 @@ a:hover {
   background: #fde2e2;
   border-color: #f8b4b4;
   color: #9f1239;
-  font-weight: 600; /* 保留刪除按鈕為粗體 */
+  font-weight: 400; /* 保留刪除按鈕為粗體 */
 }
 
 /* 小尺寸按鈕 */
@@ -365,7 +365,7 @@ button {
   background: #fef2f2;
   border-color: #fde2e2;
   color: #9f1239;
-  font-weight: 600;
+  font-weight: 400;
 }
 #btnCancel.btn:hover {
   filter: brightness(1.02);

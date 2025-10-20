@@ -88,11 +88,11 @@ if ($action === 'list_active') {
     $params = [];
     if ($q !== '') {
         $where .= " AND (
-            full_name     LIKE :q1 ESCAPE '\\' OR
-            phone         LIKE :q2 ESCAPE '\\' OR
-            phone_mobile  LIKE :q3 ESCAPE '\\' OR
-            email         LIKE :q4 ESCAPE '\\' OR
-            address       LIKE :q5 ESCAPE '\\'
+            full_name     LIKE :q1 OR
+            phone         LIKE :q2 OR
+            phone_mobile  LIKE :q3 OR
+            email         LIKE :q4 OR
+            address       LIKE :q5 
         )";
         $search = like_q($q);
         $params = [
@@ -133,11 +133,11 @@ if ($action === 'list_resigned') {
     $params = [];
     if ($q !== '') {
         $where .= " AND (
-            full_name     LIKE :q1 ESCAPE '\\' OR
-            phone         LIKE :q2 ESCAPE '\\' OR
-            phone_mobile  LIKE :q3 ESCAPE '\\' OR
-            email         LIKE :q4 ESCAPE '\\' OR
-            address       LIKE :q5 ESCAPE '\\'
+            full_name     LIKE :q1 OR
+            phone         LIKE :q2 OR
+            phone_mobile  LIKE :q3 OR
+            email         LIKE :q4 OR
+            address       LIKE :q5 
         )";
         $search = like_q($q);
         $params = [
@@ -419,11 +419,11 @@ if ($action === 'print') {
     $params = [];
     if ($q !== '') {
         $where .= " AND (
-            full_name     LIKE :q1 ESCAPE '\\' OR
-            phone         LIKE :q2 ESCAPE '\\' OR
-            phone_mobile  LIKE :q3 ESCAPE '\\' OR
-            email         LIKE :q4 ESCAPE '\\' OR
-            address       LIKE :q5 ESCAPE '\\'
+            full_name     LIKE :q1 OR
+            phone         LIKE :q2 OR
+            phone_mobile  LIKE :q3 OR
+            email         LIKE :q4 OR
+            address       LIKE :q5 
         )";
         $search = like_q($q);
         $params = [

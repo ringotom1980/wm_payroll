@@ -20,6 +20,18 @@ body{
   margin:0; background:var(--bg); color:var(--ink);
   font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Noto Sans","PingFang TC","Microsoft JhengHei",sans-serif;
 }
+
+/* 修正 #1：讓按鈕/表單控制項與全站字型一致（不改顏色） */
+button,
+input,
+select,
+textarea,
+.btn{
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
 a{color:var(--brand); text-decoration:none; transition:color .3s ease;}
 a:hover{text-decoration:none; color:var(--brand-600);} /* 🚫 取消全站底線 */
 
@@ -149,7 +161,6 @@ a:hover{text-decoration:none; color:var(--brand-600);} /* 🚫 取消全站底�
   margin-top: 24px;
 }
 
-
 /* === 主要內容區 === */
 .container{margin-left:210px;padding:16px;}
 .row{margin-bottom:16px;}
@@ -227,12 +238,30 @@ a:hover{text-decoration:none; color:var(--brand-600);} /* 🚫 取消全站底�
 .btn:disabled{opacity:.6;cursor:not-allowed;}
 .btn.primary{background:var(--brand);}
 .btn.secondary{background:#fff;color:#0f172a;}
+
+/* 支援 .btn.ghost 與 .btn-ghost 兩種寫法 */
+.btn.ghost,
 .btn-ghost{
   background:transparent;
   color:var(--ink);
   border:1px solid var(--line);
 }
+.btn.ghost:hover,
 .btn-ghost:hover{background:#f8fafc;}
+
+/* 修正 #2：刪除按鈕（淡粉色）與小尺寸 */
+.btn.danger{
+  background:#fde2e2;     /* 淡粉色底 */
+  border-color:#f8b4b4;   /* 淡粉色邊框 */
+  color:#b91c1c;          /* 深紅字 */
+}
+.btn.danger:hover{filter:brightness(1.03);}
+
+.btn.small{
+  padding:4px 8px;
+  font-size:12px;
+  border-radius:8px;
+}
 
 /* === 連結樣式 === */
 .link{color:var(--brand);font-weight:600;text-decoration:none;}

@@ -1,22 +1,27 @@
+/* === Salary Master (fixed to avoid horizontal overflow) === */
 .section-block { margin-bottom: 16px; }
 .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
 .section-header h2 { margin:0; font-size:16px; }
 
+/* 表格容器：關閉水平捲軸，不讓內容撐出頁面 */
 .table-wrap {
   width: 100%;
-  overflow: auto;
+  overflow-x: hidden;   /* 重要：避免橫向捲軸 */
+  overflow-y: auto;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   background: #fff;
 }
 
+/* 表格本體：固定布局，寬度跟隨容器，不再使用 min-width */
 .wm-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1200px;
+  table-layout: fixed;  /* 重要：避免欄位撐爆容器 */
   font-size: 14px;
 }
 
+/* 表頭 */
 .wm-table thead th {
   background: #f8fafc;
   color: #111827;
@@ -25,38 +30,41 @@
   padding: 10px 12px;
   border-bottom: 1px solid #e5e7eb;
   white-space: nowrap;
+  overflow: hidden;             /* 與 table-layout:fixed 搭配 */
+  text-overflow: ellipsis;      /* 超長顯示 … */
 }
 
+/* 內容列 */
 .wm-table tbody td {
   padding: 10px 12px;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
   white-space: nowrap;
+  overflow: hidden;             /* 避免撐出 */
+  text-overflow: ellipsis;
 }
 
+/* 小計列 */
 .wm-table tfoot th,
 .wm-table tfoot td {
   padding: 10px 12px;
   background: #fafafa;
   border-top: 1px solid #e5e7eb;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* 對齊/狀態 */
 .t-num { text-align: right; }
+.t-readonly { background: #f9fafb; color: #374151; }
 
-.t-readonly {
-  background: #f9fafb;
-  color: #374151;
-}
+/* 可點欄位（僅樣式提示） */
+.is-clickable { position: relative; cursor: pointer; }
+.is-clickable:hover { background: #f0f9ff; }
 
-.is-clickable {
-  position: relative;
-  cursor: pointer;
-}
-.is-clickable:hover {
-  background: #f0f9ff;
-}
-
+/* 版面框架（沿用專案慣例） */
 .layout { display:grid; grid-template-columns: 240px 1fr; min-height:100vh; }
 .content { padding: 16px 20px; }
 .page-title { margin: 6px 0 14px; }
@@ -67,6 +75,7 @@
   padding:14px;
 }
 
+/* 小螢幕：不再使用 min-width，交由 fixed layout 自行縮放 */
 @media (max-width: 1280px) {
-  .wm-table { min-width: 1000px; }
+  /* 無需設定 min-width，維持等分欄位與省略號 */
 }

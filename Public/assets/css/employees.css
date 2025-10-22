@@ -230,3 +230,16 @@ select {
   text-align: center !important;
   width: 90px;
 }
+
+/* 平滑捲動（只影響錨點/scrollIntoView） */
+html { scroll-behavior: smooth; }
+
+/* 點列表列後，讓上方表單有短暫「呼吸」邊框 */
+@keyframes empFormFlash {
+  0%   { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.75); }
+  100% { box-shadow: 0 0 0 12px rgba(14, 165, 233, 0); }
+}
+#empFormSection.flash {
+  animation: empFormFlash 0.8s ease-out 1;
+  border-color: #0ea5e9 !important; /* 與 --brand 一致的藍色 */
+}

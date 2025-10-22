@@ -142,6 +142,23 @@
     }
   }
 
+    // ---- 捲到上區塊並聚焦（點列表列時用） ----
+  function jumpToForm() {
+    const sec = $('#empFormSection');
+    if (!sec) return;
+
+    // 平滑捲到上區塊
+    sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // 視覺提示：加上閃爍框，動畫結束移除
+    sec.classList.add('flash');
+    sec.addEventListener('animationend', () => sec.classList.remove('flash'), { once: true });
+
+    // 聚焦到第一個欄位（避免再次捲動）
+    setTimeout(() => els.full_name?.focus({ preventScroll: true }), 300);
+  }
+
+
   function readForm() {
     return {
       emp_id: els.emp_id.value || '',
@@ -336,6 +353,8 @@
     const res = await apiFetch(`${API}?action=get&emp_id=${encodeURIComponent(id)}`);
     if (!res.ok) return;
     fillForm(res.data);
+    // ★ 新增：帶入後捲到上區塊並聚焦
+    jumpToForm();
   }
   els.tbodyActive.addEventListener('click', (e) => onRowClick(e, 'active'));
   els.tbodyResigned.addEventListener('click', (e) => onRowClick(e, 'resigned'));

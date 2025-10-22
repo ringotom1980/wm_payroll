@@ -7,8 +7,8 @@
     <meta charset="utf-8">
     <title>員工主檔｜旺苗人員薪資管理</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="/assets/css/app.css?v=13" rel="stylesheet">
-    <link href="/assets/css/employees.css?v=13" rel="stylesheet">
+    <link href="/assets/css/app.css?v=14" rel="stylesheet">
+    <link href="/assets/css/employees.css?v=14" rel="stylesheet">
     <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 
@@ -230,7 +230,7 @@
         </div>
     </div>
     <?php require __DIR__ . '/../partials/footer.php'; ?>
-    <script src="/assets/js/employees.js?v=8" defer></script>
+    <script src="/assets/js/employees.js?v=9" defer></script>
 </body>
 
 </html>

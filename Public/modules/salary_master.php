@@ -6,7 +6,7 @@
   <title>薪資主檔｜旺苗人員薪資管理</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="/assets/css/app.css?v=1" rel="stylesheet">
-  <link href="/assets/css/salary_master.css?v=1" rel="stylesheet">
+  <link href="/assets/css/salary_master.css?v=2" rel="stylesheet">
   <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 <body>

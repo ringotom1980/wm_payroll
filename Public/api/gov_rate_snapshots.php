@@ -6,17 +6,13 @@ header('Content-Type: application/json; charset=utf-8');
 // -------------------------------
 // 0) 授權檢查（需登入）
 // -------------------------------
-if (session_status() === PHP_SESSION_NONE) session_start();
-if (
-    empty($_SESSION['user']) &&
-    empty($_SESSION['uid']) &&
-    empty($_SESSION['username']) &&
-    empty($_SESSION['auth'])
-) {
+require __DIR__ . '/../../config/auth.php';
+if (!is_logged_in()) {
     http_response_code(401);
     echo json_encode(['ok' => false, 'message' => 'Unauthorized']);
     exit;
 }
+
 
 // -------------------------------
 // 1) DB 連線

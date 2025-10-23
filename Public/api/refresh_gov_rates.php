@@ -155,6 +155,18 @@ function pick(array $row, array $candidates): ?string
     return null;
 }
 
+/** 取得相同唯一鍵（scheme+effective_date+version_label_norm）的既有 snapshot_id，沒有就回 null */
+function get_existing_snapshot_id(PDO $pdo, string $scheme, string $effectiveDate, ?string $versionLabel): ?int {
+    $sql = "SELECT snapshot_id FROM gov_rate_snapshots
+            WHERE scheme=? AND effective_date=? AND COALESCE(version_label,'') = COALESCE(?, '')
+            LIMIT 1";
+    $st = $pdo->prepare($sql);
+    $st->execute([$scheme, $effectiveDate, $versionLabel]);
+    $id = $st->fetchColumn();
+    return $id ? (int)$id : null;
+}
+
+
 /** 取得或建立 gov_rate_sources.source_id（以 scheme+source_url 唯一） */
 function get_or_create_source_id(PDO $pdo, string $scheme, string $sourceUrl, string $format = 'JSON', ?string $note = null): int
 {
@@ -240,16 +252,47 @@ function get_latest_snapshot(PDO $pdo, string $scheme): ?array
 }
 
 /** 新建 snapshot + levels（在交易內呼叫） */
-function insert_snapshot_and_levels(PDO $pdo, string $scheme, ?string $versionLabel, string $effectiveDate, array $rows, string $rawJson, int $sourceId): array
-{
-    // 1) snapshots
-    $stmt = $pdo->prepare("INSERT INTO gov_rate_snapshots (source_id, scheme, version_label, effective_date, record_count, status, fetched_at, raw_json, checksum_sha256) VALUES (?, ?, ?, ?, ?, 'ACTIVE', NOW(), ?, ?)");
+function insert_snapshot_and_levels(
+    PDO $pdo,
+    string $scheme,
+    ?string $versionLabel,
+    string $effectiveDate,
+    array $rows,
+    string $rawJson,
+    int $sourceId
+): array {
     $checksum = sha256($rawJson);
-    $stmt->execute([$sourceId, $scheme, $versionLabel, $effectiveDate, count($rows), $rawJson, $checksum]);
+    $nowCount = count($rows);
+
+    // 1) UPSERT snapshots（首筆是 INSERT；之後遇到同唯一鍵就是 UPDATE）
+    //    關鍵：最後一行把 snapshot_id = LAST_INSERT_ID(snapshot_id)
+    //    這樣不論是 insert 還是 update，PDO->lastInsertId() 都會回傳那一筆 snapshot_id
+    $stmt = $pdo->prepare("
+        INSERT INTO gov_rate_snapshots
+            (source_id, scheme, version_label, effective_date, record_count, status, fetched_at, raw_json, checksum_sha256)
+        VALUES
+            (?, ?, ?, ?, ?, 'ACTIVE', NOW(), ?, ?)
+        ON DUPLICATE KEY UPDATE
+            source_id = VALUES(source_id),
+            record_count = VALUES(record_count),
+            status = 'ACTIVE',
+            fetched_at = NOW(),
+            raw_json = VALUES(raw_json),
+            checksum_sha256 = VALUES(checksum_sha256),
+            snapshot_id = LAST_INSERT_ID(snapshot_id)
+    ");
+    $stmt->execute([$sourceId, $scheme, $versionLabel, $effectiveDate, $nowCount, $rawJson, $checksum]);
+
+    // 取得該筆 snapshot_id（insert 或 update 都可拿到）
     $snapshotId = (int)$pdo->lastInsertId();
 
-    // 2) levels（原樣保留）
-    $ins = $pdo->prepare("INSERT INTO gov_rate_levels (snapshot_id, level_no, wage_min, wage_max, base_amount, category) VALUES (?,?,?,?,?,?)");
+    // 2) 重建 levels：先清除舊的，再批量寫入
+    $pdo->prepare("DELETE FROM gov_rate_levels WHERE snapshot_id=?")->execute([$snapshotId]);
+
+    $ins = $pdo->prepare("
+        INSERT INTO gov_rate_levels (snapshot_id, level_no, wage_min, wage_max, base_amount, category)
+        VALUES (?,?,?,?,?,?)
+    ");
     $count = 0;
     foreach ($rows as $r) {
         $ins->execute([
@@ -263,11 +306,19 @@ function insert_snapshot_and_levels(PDO $pdo, string $scheme, ?string $versionLa
         $count++;
     }
 
-    // 3) 將舊版標 ARCHIVED（原樣）
-    $pdo->prepare("UPDATE gov_rate_snapshots SET status='ARCHIVED' WHERE scheme=? AND snapshot_id<>? AND status='ACTIVE'")
-        ->execute([$scheme, $snapshotId]);
+    // 3) 將同 scheme 其他 ACTIVE 標成 ARCHIVED（保留你原本的語意）
+    $pdo->prepare("
+        UPDATE gov_rate_snapshots
+           SET status='ARCHIVED'
+         WHERE scheme=? AND snapshot_id<>? AND status='ACTIVE'
+    ")->execute([$scheme, $snapshotId]);
 
-    return ['snapshot_id' => $snapshotId, 'record_count' => $count, 'checksum' => $checksum];
+    // 4) 回傳動作描述（created / updated）供前端訊息用
+    //    判斷方式：看這次是否觸發 duplicate（用受影響行數無法準確分辨；改用是否已存在判斷更穩）
+    $existed = get_existing_snapshot_id($pdo, $scheme, $effectiveDate, $versionLabel) === $snapshotId;
+    $action = $existed ? 'updated' : 'created'; // 若想更嚴謹，可在呼叫前先查
+
+    return ['snapshot_id' => $snapshotId, 'record_count' => $count, 'checksum' => $checksum, 'action' => $action];
 }
 
 

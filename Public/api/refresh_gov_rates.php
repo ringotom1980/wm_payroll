@@ -50,16 +50,46 @@ const NHI_DATASET_ENDPOINT = 'https://info.nhi.gov.tw/api/iode000s01/Dataset?rId
 // -------------------------------
 // 4) 小工具
 // -------------------------------
-function fetch_json(string $url, int $timeoutSec = 20): array {
-    $ctx = stream_context_create(['http' => ['timeout' => $timeoutSec, 'ignore_errors' => true]]);
-    $raw = @file_get_contents($url, false, $ctx);
-    if ($raw === false) throw new RuntimeException("抓取失敗 $url");
-    // 去除 UTF-8 BOM
-    if (strncmp($raw, "\xEF\xBB\xBF", 3) === 0) $raw = substr($raw, 3);
-    $data = json_decode($raw, true);
-    if (!is_array($data)) throw new RuntimeException("JSON 解析失敗 $url");
-    return [$data, $raw];
+function fetch_json(string $url, int $timeoutSec = 8): array {
+    $maxBytes = 5_000_000; // 5MB 防雷
+    $buf = '';
+
+    $ch = curl_init($url);
+    if (!$ch) throw new RuntimeException("cURL init 失敗: $url");
+
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => false,       // 用 writefunction 控制大小
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS => 3,
+        CURLOPT_CONNECTTIMEOUT => min(3, $timeoutSec), // 連線 3 秒
+        CURLOPT_TIMEOUT => $timeoutSec,        // 總逾時
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_USERAGENT => 'wm_payroll/1.0 (+wmpay.jinghong.pw)',
+        CURLOPT_HTTPHEADER => ['Accept: application/json; charset=utf-8'],
+        CURLOPT_WRITEFUNCTION => function($ch, $str) use (&$buf, $maxBytes) {
+            $buf .= $str;
+            if (strlen($buf) > $maxBytes) return 0; // 超過上限即中止
+            return strlen($str);
+        },
+    ]);
+
+    $ok = curl_exec($ch);
+    $err = curl_error($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+
+    if ($ok !== true) throw new RuntimeException("抓取失敗: $url ($err)");
+    if ($code < 200 || $code >= 300) throw new RuntimeException("來源HTTP狀態: $code ($url)");
+
+    // 去BOM
+    if (strncmp($buf, "\xEF\xBB\xBF", 3) === 0) $buf = substr($buf, 3);
+
+    $data = json_decode($buf, true);
+    if (!is_array($data)) throw new RuntimeException("JSON 解析失敗: $url");
+    return [$data, $buf];
 }
+
 
 /** 民國 yyyMMdd 或 yyy/MM/dd / yyy-MM-dd → 西元 YYYY-MM-DD；若已是西元也可解析 */
 function to_gregorian_date(?string $s): ?string {
@@ -120,31 +150,41 @@ function pick(array $row, array $candidates): ?string {
 }
 
 /** 健保 rId 自動掃描：回傳 [rId, data, raw] */
-function find_latest_nhi_dataset(): array {
-    // 先嘗試 00Z → 000..199 的順序（從新到舊）
-    $suffixes = [];
-    // A..Z
-    for ($c = ord('Z'); $c >= ord('A'); $c--) $suffixes[] = '00' . chr($c);
-    // 000..199
-    for ($i = 199; $i >= 0; $i--) $suffixes[] = str_pad((string)$i, 3, '0', STR_PAD_LEFT);
+function find_latest_nhi_dataset(int $maxProbe = 24, int $timeoutSecPerProbe = 5): array {
+    // 觀察：NHI 的 rId 後綴通常是 00A..00Z（年度批次），偶爾用數字
+    // 我們優先探測 00Z → 00T（共 7 個），再探測 009 → 000（10 個），剩下補足到 $maxProbe
+    $candidates = [];
 
-    foreach ($suffixes as $suf) {
+    // 先 Z→T
+    foreach (range('Z', 'T') as $ch) { $candidates[] = '00' . $ch; }
+    // 再 009→000
+    for ($i = 9; $i >= 0; $i--) $candidates[] = '00' . $i;
+    // 若還不夠，補 S→A
+    if (count($candidates) < $maxProbe) {
+        foreach (range('S', 'A') as $ch) {
+            $candidates[] = '00' . $ch;
+            if (count($candidates) >= $maxProbe) break;
+        }
+    }
+
+    foreach ($candidates as $suf) {
         $rId = NHI_RID_PREFIX . $suf;
         $url = NHI_DATASET_ENDPOINT . $rId;
         try {
-            [$data, $raw] = fetch_json($url, 20);
-            if (!is_array($data) || count($data) < 10) continue; // 少於 10 筆太可疑
-            // 粗略驗證欄位：需包含任何一種健保常見鍵名
+            [$data, $raw] = fetch_json($url, $timeoutSecPerProbe);
+            if (!is_array($data) || count($data) < 10) continue;
             $row0 = (array)$data[0];
             $keys = implode('|', array_keys($row0));
             if (!preg_match('/(級距|等級|月投保金額|投保金額|實際薪資月額)/u', $keys)) continue;
             return [$rId, $data, $raw];
         } catch (Throwable $e) {
+            // 繼續試下一個
             continue;
         }
     }
-    throw new RuntimeException('無法找到健保最新 rId');
+    throw new RuntimeException('無法找到健保最新 rId（已嘗試 ' . count($candidates) . ' 個）');
 }
+
 
 /** 由健保資料推測生效日（嘗試找常見鍵名），若無則以當年 01-01 */
 function infer_effective_date_from_nhi(array $data): string {

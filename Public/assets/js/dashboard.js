@@ -37,30 +37,38 @@
 
   // 手動同步政府資料
   async function refreshGovRates() {
-    setMsg('正在同步政府資料中…');
-    btnRefresh.disabled = true;
-    try {
-      const formData = new URLSearchParams({ force: 1 });
+  const schemes = ['LABOR_INSURANCE', 'LABOR_PENSION', 'NHI'];
+  btnRefresh.disabled = true;
+  try {
+    setMsg('開始同步：勞保 → 勞退 → 健保…');
+
+    const summaryParts = [];
+    for (let i = 0; i < schemes.length; i++) {
+      const sc = schemes[i];
+      setMsg(`同步中（${i+1}/3）：${sc}…`);
+      const formData = new URLSearchParams({ force: 1, 'schemes[]': sc });
       const r = await fetch('/api/refresh_gov_rates.php', {
         method: 'POST',
         body: formData,
         credentials: 'same-origin',
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok || !data.ok) throw new Error(data.message || '同步失敗');
+      if (!r.ok || !data.ok) throw new Error((data && data.message) || `同步 ${sc} 失敗 (HTTP ${r.status})`);
       const updated = data.updated || [];
-      const summary = updated
-        .map((u) => `${u.scheme.replace('LABOR_','').replace('_',' ')}：${u.action}`)
-        .join('、');
-      setMsg(`同步完成（${summary}）`);
-      await loadGovStatus();
-    } catch (err) {
-      console.error(err);
-      setMsg('同步失敗：' + err.message, 'error');
-    } finally {
-      btnRefresh.disabled = false;
+      const piece = updated.map(u => `${u.scheme.replace('LABOR_','').replace('_',' ')}：${u.action}`).join('、') || `${sc}：skipped`;
+      summaryParts.push(piece);
     }
+
+    setMsg(`同步完成（${summaryParts.join('；')}）`);
+    await loadGovStatus();
+  } catch (err) {
+    console.error(err);
+    setMsg('同步失敗：' + err.message, 'error');
+  } finally {
+    btnRefresh.disabled = false;
   }
+}
+
 
   // 初始化
   document.addEventListener('DOMContentLoaded', () => {

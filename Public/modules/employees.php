@@ -1,19 +1,14 @@
 <?php // Public/modules/employees.php 
 require __DIR__ . '/../partials/header.php'; // ✅ ← 頁首引入
 ?>
-<!DOCTYPE html>
-<html lang="zh-Hant">
 
-<head>
-    <meta charset="utf-8">
-    <title>員工主檔｜旺苗人員薪資管理</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="/assets/css/employees.css?v=14" rel="stylesheet">
-    <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
+<title>員工主檔｜旺苗人員薪資管理</title>
+<link href="/assets/css/employees.css?v=14" rel="stylesheet">
+<link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 
 <body>
-    
+
     <div class="layout" id="layout">
         <?php include __DIR__ . '/../partials/sidebar.php'; ?>
 

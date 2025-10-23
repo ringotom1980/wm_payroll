@@ -42,10 +42,10 @@ $maxAgeHours = isset($input['max_age_hours']) ? max(1, (int)$input['max_age_hour
 // -------------------------------
 // 3) 常數：來源 URL（固定）
 // -------------------------------
-const URL_MOL_LI = 'https://apiservice.mol.gov.tw/OdService/download/A17000000J-020030-3fD'; // 勞工保險
+const URL_MOL_LI = 'https://apiservice.mol.gov.tw/OdService/download/A17000000J-020014-rpF'; // 勞工保險
 const URL_MOL_LP = 'https://apiservice.mol.gov.tw/OdService/download/A17000000J-020031-8So'; // 勞工退休金
 const NHI_RID_PREFIX = 'A21030000I-B1000A-'; // 健保 rId 前綴
-const NHI_DATASET_ENDPOINT = 'https://info.nhi.gov.tw/api/iode000s01/Dataset?rId=';
+const NHI_DATASET_ENDPOINT = 'https://info.nhi.gov.tw/api/iode0000s01/Dataset?rId=';
 
 // -------------------------------
 // 4) 小工具

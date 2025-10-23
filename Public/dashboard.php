@@ -13,7 +13,7 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
   <title><?php echo $APP_NAME; ?>｜儀表板</title>
 
   <!-- ✅ 全站共用樣式 -->
-  <link href="/assets/css/app.css?v=13" rel="stylesheet">
+  <?php require __DIR__ . '/partials/header.php'; ?>
 </head>
 <body>
 <?php require __DIR__ . '/partials/header.php'; ?>
@@ -131,5 +131,6 @@ $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT
 </main>
 
 <?php require __DIR__ . '/partials/footer.php'; ?>
+<script src="/assets/js/dashboard.js?v=1"></script>
 </body>
 </html>

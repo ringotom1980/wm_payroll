@@ -419,3 +419,26 @@ img {
 .auth-user {
   font-weight: 600;
 }
+
+/* === 政府資料同步訊息樣式 === */
+#govRefreshMsg {
+  font-size: 13px;
+  transition: color 0.3s ease, opacity 0.3s ease;
+  opacity: 0.9;
+}
+
+#govRefreshMsg.muted {
+  color: var(--muted, #6b7280);
+}
+
+#govRefreshMsg.success {
+  color: #059669; /* 綠色 */
+}
+
+#govRefreshMsg.error {
+  color: #dc2626; /* 紅色 */
+}
+
+#govRefreshMsg.info {
+  color: #2563eb; /* 藍色（資訊狀態） */
+}

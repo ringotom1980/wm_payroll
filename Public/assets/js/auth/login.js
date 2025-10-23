@@ -12,7 +12,6 @@
   }
 
   // 若有 ?logged_out=1，顯示提示
-  // 顯示登出提示
   const params = new URLSearchParams(location.search);
   if (params.get('logged_out')) {
     const msg = document.getElementById('msg');
@@ -49,6 +48,13 @@
         btn.disabled = false;
         return;
       }
+
+      // ✅ 登入成功後，非阻塞觸發政府資料同步
+      fetch('/api/refresh_gov_rates.php', {
+        method: 'POST',
+        body: new URLSearchParams({ force: 0 }),
+        credentials: 'same-origin',
+      }).catch(() => {});
 
       // 登入成功 → 導向儀表板
       window.location.assign('/dashboard');

@@ -1,78 +1,36 @@
-// Public/assets/js/dashboard.js
-(() => {
-  const $ = (q) => document.querySelector(q);
+// Public/js/dashboard.js
+async function refreshGovRates() {
+  const btn = document.getElementById('btnSync');
+  const msg = document.getElementById('syncMsg');
+  if (!btn || !msg) return;
 
-  const btnRefresh = $('#btnRefreshGov');
-  const msgEl = $('#govRefreshMsg');
-  const kpiLastSync = $('#govLastSync');
+  btn.disabled = true;
+  msg.textContent = '同步中…';
 
-  // 顯示狀態
-  function setMsg(txt, type = 'info') {
-  msgEl.textContent = txt || '';
-  msgEl.className = '';
-  if (txt) msgEl.classList.add(type);
-}
-
-
-  // 讀取最新同步狀態
-  async function loadGovStatus() {
-    try {
-      const r = await fetch('/api/gov_rate_snapshots.php?mode=status', { credentials: 'same-origin' });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok || !data.ok) throw new Error('HTTP ' + r.status);
-      const rows = data.status || [];
-      if (rows.length === 0) {
-        kpiLastSync.textContent = '尚未同步';
-        return;
-      }
-      // 找出最新 fetched_at
-      const latest = rows.reduce((a, b) => (a.fetched_at > b.fetched_at ? a : b));
-      const ts = latest.fetched_at ? latest.fetched_at.replace('T',' ').slice(0,19) : '—';
-      kpiLastSync.textContent = ts;
-    } catch (err) {
-      kpiLastSync.textContent = '—';
-      console.error('loadGovStatus', err);
-    }
-  }
-
-  // 手動同步政府資料
-  async function refreshGovRates() {
-  const schemes = ['LABOR_INSURANCE', 'LABOR_PENSION', 'NHI'];
-  btnRefresh.disabled = true;
   try {
-    setMsg('開始同步：勞保 → 勞退 → 健保…');
+    const res = await fetch('./api/refresh_gov_rates.php', {
+      method: 'POST',
+      headers: {'Accept':'application/json'}
+    });
+    const json = await res.json().catch(() => ({}));
 
-    const summaryParts = [];
-    for (let i = 0; i < schemes.length; i++) {
-      const sc = schemes[i];
-      setMsg(`同步中（${i+1}/3）：${sc}…`);
-      const formData = new URLSearchParams({ force: 1, 'schemes[]': sc });
-      const r = await fetch('/api/refresh_gov_rates.php', {
-        method: 'POST',
-        body: formData,
-        credentials: 'same-origin',
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok || !data.ok) throw new Error((data && data.message) || `同步 ${sc} 失敗 (HTTP ${r.status})`);
-      const updated = data.updated || [];
-      const piece = updated.map(u => `${u.scheme.replace('LABOR_','').replace('_',' ')}：${u.action}`).join('、') || `${sc}：skipped`;
-      summaryParts.push(piece);
+    if (!res.ok || !json.ok) {
+      const err = (json.errors && JSON.stringify(json.errors)) || json.error || res.statusText || '發生錯誤';
+      throw new Error(err);
     }
 
-    setMsg(`同步完成（${summaryParts.join('；')}）`);
-    await loadGovStatus();
-  } catch (err) {
-    console.error(err);
-    setMsg('同步失敗：' + err.message, 'error');
+    msg.textContent = '完成！請重新整理查看最新統計。';
+    // 可選：自動刷新頁面
+    setTimeout(() => location.reload(), 800);
+  } catch (e) {
+    console.error(e);
+    msg.textContent = '失敗：' + (e.message || e);
   } finally {
-    btnRefresh.disabled = false;
+    btn.disabled = false;
   }
 }
 
-
-  // 初始化
-  document.addEventListener('DOMContentLoaded', () => {
-    loadGovStatus();
-    if (btnRefresh) btnRefresh.addEventListener('click', refreshGovRates);
-  });
-})();
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('btnSync');
+  if (btn) btn.addEventListener('click', refreshGovRates);
+});

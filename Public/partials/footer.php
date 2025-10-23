@@ -9,11 +9,19 @@ $version = htmlspecialchars($app['APP_VERSION'] ?? 'v1.0.0', ENT_QUOTES);
     <span class="muted">© <?= date('Y') ?> <?= $APP_NAME ?> · All rights reserved.</span>
   </div>
   <div class="footer-right">
-    <span class="muted">版本：<?= $version ?>｜政府分攤資料：<span id="govVer">最新</span></span>
+    <span class="muted">
+      版本：<?= $version ?>｜政府分攤資料：<span id="govVer">最新</span>
+    </span>
   </div>
 </footer>
 
 <!-- 全站共用腳本（外掛，不內嵌） -->
-<script src="/assets/js/app.js?v=6"></script>
-<script src="/assets/js/auth/logout.js?v=3"></script>
+<?php
+$jsVerApp = filemtime(__DIR__ . '/../assets/js/app.js');
+$jsVerLogout = filemtime(__DIR__ . '/../assets/js/auth/logout.js');
+?>
+<script src="/assets/js/app.js?v=<?= $jsVerApp ?>"></script>
+<script src="/assets/js/auth/logout.js?v=<?= $jsVerLogout ?>"></script>
 
+</body>
+</html>

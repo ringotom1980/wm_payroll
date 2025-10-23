@@ -7,7 +7,7 @@ if (!is_logged_in()) {
   exit;
 }
 $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT_QUOTES);
-
+$PAGE_TITLE = '儀表板';
 // 這行會輸出 <!DOCTYPE html><html><head> 與共用 app.css
 require __DIR__ . '/partials/header.php';
 ?>

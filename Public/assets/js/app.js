@@ -36,7 +36,7 @@
     if (el) el.textContent = v;
   }
 
-// 401 共用處理器
+  // 401 共用處理器
   function handleAuthError(e) {
     if (e && e.status === 401) {
       // 依你的 rewrite：/login 會對應 Public/auth/login.php
@@ -90,7 +90,19 @@
     }
   }
 
-  // 手動同步政府資料
+  // 追加：小工具，用於刷新 KPI「政府分攤資料最後更新時間」
+  async function updateGovStatus() {
+    try {
+      const r = await fetchJSON('/api/gov_rate_snapshots.php?mode=status');
+      const rows = r.status || [];
+      if (!rows.length) return;
+      const latest = rows.reduce((a, b) => (a.fetched_at > b.fetched_at ? a : b));
+      const ts = latest.fetched_at ? latest.fetched_at.replace('T', ' ').slice(0, 19) : '—';
+      setText('#govLastSync', ts);
+    } catch (_) { }
+  }
+
+  // 取代原本的 bindGovRefresh() 內容
   function bindGovRefresh() {
     const btn = $('#btnRefreshGov');
     if (!btn) return;
@@ -98,17 +110,29 @@
       btn.disabled = true;
       setText('#govRefreshMsg', '同步中...');
       try {
-        const res = await fetchJSON('/api/gov_rate_snapshots.php?action=refresh_now');
-        setText('#govRefreshMsg', res.message ?? '完成');
+        // 正確的 API：POST /api/refresh_gov_rates.php，force=1 代表手動強制更新
+        const res = await fetchJSON('/api/refresh_gov_rates.php', {
+          method: 'POST',
+          body: new URLSearchParams({ force: 1 }),
+        });
+
+        // 組合人類可讀的摘要
+        const updated = res.updated || [];
+        const summary = updated.map(u => `${u.scheme.replace('LABOR_', '').replace('_', ' ')}：${u.action}`).join('、') || '已是最新';
+        setText('#govRefreshMsg', `同步完成（${summary}）`);
+
+        // 立刻刷新 KPI「最後更新時間」
+        await updateGovStatus();
       } catch (e) {
         if (handleAuthError(e)) return;
         console.error(e);
-        setText('#govRefreshMsg', '失敗，請稍後再試');
+        setText('#govRefreshMsg', '同步失敗，請稍後再試');
       } finally {
         btn.disabled = false;
       }
     });
   }
+
 
   // ---------- 近期異動 ----------
   async function loadRecentChanges(page = 1) {

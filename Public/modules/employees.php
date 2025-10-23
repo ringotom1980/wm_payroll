@@ -1,8 +1,8 @@
 <?php // Public/modules/employees.php 
+$PAGE_TITLE = '員工主檔';
 require __DIR__ . '/../partials/header.php'; // ✅ ← 頁首引入
 ?>
 
-<title>員工主檔｜旺苗人員薪資管理</title>
 <link href="/assets/css/employees.css?v=14" rel="stylesheet">
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>

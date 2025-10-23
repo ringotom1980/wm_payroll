@@ -2,14 +2,18 @@
 // Public/dashboard.php
 $app = require __DIR__ . '/../config/app.php';
 require __DIR__ . '/../config/auth.php';
-if (!is_logged_in()) { header('Location: /auth/login'); exit; }
+if (!is_logged_in()) {
+  header('Location: /auth/login');
+  exit;
+}
 $APP_NAME = htmlspecialchars($app['APP_NAME'] ?? '旺苗人員薪資管理', ENT_QUOTES);
+
+// 這行會輸出 <!DOCTYPE html><html><head> 與共用 app.css
 require __DIR__ . '/partials/header.php';
 ?>
 
-  <title><?php echo $APP_NAME; ?>｜儀表板</title>
-
-  <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
+<title><?= $APP_NAME ?>｜儀表板</title>
+<link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 <body>
 <?php require __DIR__ . '/partials/sidebar.php'; ?>

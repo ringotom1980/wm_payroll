@@ -62,8 +62,9 @@ function fetch_json(string $url, int $timeoutSec = 8): array
         CURLOPT_RETURNTRANSFER => false,       // 用 writefunction 控制大小
         CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_MAXREDIRS => 3,
-        CURLOPT_CONNECTTIMEOUT => min(3, $timeoutSec), // 連線 3 秒
-        CURLOPT_TIMEOUT => $timeoutSec,        // 總逾時
+        CURLOPT_CONNECTTIMEOUT => 5, // 連線 5 秒
+        CURLOPT_TIMEOUT => 12,        // 總逾時
+        CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4,   // 避開 IPv6 路徑不穩
         CURLOPT_SSL_VERIFYPEER => true,
         CURLOPT_SSL_VERIFYHOST => 2,
         CURLOPT_USERAGENT => 'wm_payroll/1.0 (+wmpay.jinghong.pw)',
@@ -374,7 +375,7 @@ function refresh_labor_insurance(PDO $pdo, int $force, int $maxAgeHours): array
         $ret = insert_snapshot_and_levels($pdo, 'LABOR_INSURANCE', null, $effDate, $rows, $raw, $sourceId);
 
         $pdo->commit();
-        return ['scheme' => 'LABOR_INSURANCE', 'action' => 'created'] + $ret + ['effective_date' => $effDate, 'version_label' => null];
+        return array_merge(['scheme' => 'LABOR_INSURANCE'], $ret, ['effective_date' => $effDate, 'version_label' => null]);
     } catch (Throwable $e) {
         $pdo->rollBack();
         throw $e;
@@ -423,9 +424,9 @@ function refresh_labor_pension(PDO $pdo, int $force, int $maxAgeHours): array
     $sourceId = get_or_create_source_id($pdo, 'LABOR_PENSION', URL_MOL_LP, 'JSON', '勞退級距 (OdService JSON)');
     $pdo->beginTransaction();
     try {
-        $ret = insert_snapshot_and_levels($pdo, 'LABOR_INSURANCE', null, $effDate, $rows, $raw, $sourceId);
+        $ret = insert_snapshot_and_levels($pdo, 'LABOR_PENSION', null, $effDate, $rows, $raw, $sourceId);
         $pdo->commit();
-        return ['scheme' => 'LABOR_PENSION', 'action' => 'created'] + $ret + ['effective_date' => $effDate, 'version_label' => null];
+        return array_merge(['scheme' => 'LABOR_PENSION'], $ret, ['effective_date' => $effDate, 'version_label' => null]);
     } catch (Throwable $e) {
         $pdo->rollBack();
         throw $e;
@@ -474,7 +475,7 @@ function refresh_nhi(PDO $pdo, int $force, int $maxAgeHours): array
     try {
         $ret = insert_snapshot_and_levels($pdo, 'NHI', $rId, $effDate, $rows, $raw, $sourceId);
         $pdo->commit();
-        return ['scheme' => 'NHI', 'action' => 'created'] + $ret + ['effective_date' => $effDate, 'version_label' => $rId];
+        return array_merge(['scheme' => 'NHI'], $ret, ['effective_date' => $effDate, 'version_label' => $rId]);
     } catch (Throwable $e) {
         $pdo->rollBack();
         throw $e;

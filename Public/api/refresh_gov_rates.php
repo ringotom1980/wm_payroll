@@ -46,6 +46,7 @@ const URL_MOL_LI = 'https://apiservice.mol.gov.tw/OdService/download/A17000000J-
 const URL_MOL_LP = 'https://apiservice.mol.gov.tw/OdService/download/A17000000J-020031-8So'; // 勞工退休金
 const NHI_RID_PREFIX = 'A21030000I-B1000A-'; // 健保 rId 前綴
 const NHI_DATASET_ENDPOINT = 'https://info.nhi.gov.tw/api/iode0000s01/Dataset?rId=';
+const NHI_CATALOG_ENDPOINT = 'https://info.nhi.gov.tw/api/iode0010/v1/rest/dataset';
 
 // -------------------------------
 // 4) 小工具
@@ -157,7 +158,8 @@ function pick(array $row, array $candidates): ?string
 }
 
 /** 取得相同唯一鍵（scheme+effective_date+version_label_norm）的既有 snapshot_id，沒有就回 null */
-function get_existing_snapshot_id(PDO $pdo, string $scheme, string $effectiveDate, ?string $versionLabel): ?int {
+function get_existing_snapshot_id(PDO $pdo, string $scheme, string $effectiveDate, ?string $versionLabel): ?int
+{
     $sql = "SELECT snapshot_id FROM gov_rate_snapshots
             WHERE scheme=? AND effective_date=? AND COALESCE(version_label,'') = COALESCE(?, '')
             LIMIT 1";
@@ -181,6 +183,46 @@ function get_or_create_source_id(PDO $pdo, string $scheme, string $sourceUrl, st
     return (int)$pdo->lastInsertId();
 }
 
+/**
+ * 從官方清單 API 取得最新的 NHI rId（A21030000I-B1000A-00?）
+ * 回傳字串 rId，例如 'A21030000I-B1000A-00B'
+ */
+function find_latest_nhi_from_catalog(int $limit = 200): string
+{
+    // 1) 取清單
+    $url = NHI_CATALOG_ENDPOINT . '?limit=' . $limit . '&offset=0';
+    [$list, $rawList] = fetch_json($url, 8);
+    if (!is_array($list)) throw new RuntimeException('NHI 清單 API 解析失敗');
+
+    // 2) 過濾我們要的系列（identifier 以 A21030000I-B1000A- 開頭）
+    $items = [];
+    foreach ($list as $it) {
+        if (!is_array($it)) continue;
+        $id  = $it['identifier'] ?? null;
+        $tit = $it['title'] ?? '';
+        if (!$id || strpos($id, NHI_RID_PREFIX) !== 0) continue; // 前綴過濾
+        // 題名含關鍵字者加點分數（非必要，只為穩妥）
+        $score = 0;
+        if (preg_match('/(投保|級距|分級|金額)/u', (string)$tit)) $score += 1;
+        $items[] = [
+            'identifier' => $id,
+            'modified'   => $it['modified'] ?? null,
+            'score'      => $score,
+        ];
+    }
+    if (!$items) throw new RuntimeException('NHI 清單中找不到 B1000A 系列');
+
+    // 3) 依 modified 由新到舊排序（modified 不存在時以 score、identifier 自然序當次序）
+    usort($items, function ($a, $b) {
+        $ma = isset($a['modified']) ? strtotime((string)$a['modified']) : 0;
+        $mb = isset($b['modified']) ? strtotime((string)$b['modified']) : 0;
+        if ($ma !== $mb) return $mb <=> $ma;        // 先比 modified
+        if ($a['score'] !== $b['score']) return $b['score'] <=> $a['score']; // 再比關鍵字分數
+        return strcmp($b['identifier'], $a['identifier']); // 最後比字面（00B > 001）
+    });
+
+    return $items[0]['identifier'];
+}
 
 /** 健保 rId 自動掃描：回傳 [rId, data, raw] */
 function find_latest_nhi_dataset(int $maxProbe = 24, int $timeoutSecPerProbe = 5): array
@@ -440,8 +482,15 @@ function refresh_nhi(PDO $pdo, int $force, int $maxAgeHours): array
         return ['scheme' => 'NHI', 'action' => 'skipped', 'reason' => 'fresh', 'snapshot_id' => $latest['snapshot_id'], 'record_count' => $latest['record_count'], 'effective_date' => $latest['effective_date'], 'version_label' => $latest['version_label']];
     }
 
-    // 動態找 rId
-    [$rId, $data, $raw] = find_latest_nhi_dataset();
+    // 動態找 rId：先用官方清單 API；若失敗再退回舊的掃描邏輯
+    try {
+        $rId = find_latest_nhi_from_catalog(/*limit=*/200);
+        $url = NHI_DATASET_ENDPOINT . $rId;
+        [$data, $raw] = fetch_json($url, 8);
+    } catch (Throwable $e) {
+        // Fallback：沿用你原本的 find_latest_nhi_dataset()
+        [$rId, $data, $raw] = find_latest_nhi_dataset(60, 6);
+    }
     $effDate = infer_effective_date_from_nhi($data);
 
     // 解析健保欄位：嘗試多種鍵名

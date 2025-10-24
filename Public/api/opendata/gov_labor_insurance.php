@@ -14,7 +14,15 @@ function fetch_raw(string $url): ?string
     $ch = null;
     if (function_exists('curl_init')) {
         $ch = curl_init($url);
-        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_CONNECTTIMEOUT => 10, CURLOPT_TIMEOUT => 30, CURLOPT_SSL_VERIFYPEER => false, CURLOPT_HTTPHEADER => ['Accept: application/json'],]);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+            CURLOPT_USERAGENT      => 'wm_payroll-fetch/1.0',
+        ]);
         $res = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);

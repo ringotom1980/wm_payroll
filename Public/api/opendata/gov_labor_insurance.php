@@ -1,17 +1,15 @@
 <?php
 // Public/api/opendata/gov_labor_insurance.php
-// 勞保投保薪資分級表（REST JSON + 欄位容錯 + 區間解析 + 民國年轉換）
+// 勞保投保薪資分級：mode=status / mode=sync（抓→清空→重寫）
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../../config/db.php';
 
-$table    = 'gov_labor_insurance';
-$tmpTable = 'gov_labor_insurance_tmp';
-$url      = 'https://apiservice.mol.gov.tw/OdService/rest/datastore/A17000000J-020014-q8B';
+$table = 'gov_labor_insurance';
+$url   = 'https://apiservice.mol.gov.tw/OdService/rest/datastore/A17000000J-020014-q8B';
 
 function fetch_raw(string $url): ?string
-{ /* 同上 */
-    $ch = null;
+{
     if (function_exists('curl_init')) {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -20,14 +18,13 @@ function fetch_raw(string $url): ?string
             CURLOPT_CONNECTTIMEOUT => 10,
             CURLOPT_TIMEOUT => 30,
             CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
-            CURLOPT_USERAGENT      => 'wm_payroll-fetch/1.0',
+            CURLOPT_HTTPHEADER => ['Accept: application/json'],
+            CURLOPT_USERAGENT => 'wm_payroll-fetch/1.0',
         ]);
         $res = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-        if ($code >= 400 || $res === false) return null;
-        return $res;
+        return ($code >= 400 || $res === false) ? null : $res;
     }
     $res = @file_get_contents($url);
     return $res === false ? null : $res;
@@ -41,20 +38,24 @@ function coalesce(...$xs)
 }
 function parse_range_to_minmax(?string $s): array
 {
-    $t = $s;
-    if (!$t) return [null, null];
-    $t = preg_replace('/[^\d\-~–—～]/u', '', $t);
-    $t = str_replace(['～', '–', '—', '~'], '-', $t);
+    if (!$s) return [null, null];
+    $t = str_replace([',', '，', ' '], '', trim((string)$s));
+    $t = str_replace(['至', '到', '～', '〜', '–', '—', '－', '~'], '-', $t);
+    $t = preg_replace('/[^\d\-]/u', '', $t);
     $p = array_values(array_filter(explode('-', $t), 'strlen'));
-    if (count($p) === 2) return [0 + $p[0], 0 + $p[1]];
+    if (count($p) >= 2) {
+        $a = (int)$p[0];
+        $b = (int)$p[1];
+        if ($a > 0 && $b > 0) return [$a, $b];
+    }
     if (count($p) === 1) {
-        $n = 0 + $p[0];
-        return [$n, $n];
+        $n = (int)$p[0];
+        return $n > 0 ? [$n, $n] : [null, null];
     }
     return [null, null];
 }
 function normalize_date($v): ?string
-{ /* 同上完整版本 */
+{
     if ($v === null) return null;
     $s = trim((string)$v);
     if ($s === '') return null;
@@ -79,15 +80,13 @@ function normalize_date($v): ?string
         return checkdate($m, $d, $y3) ? sprintf('%04d-%02d-%02d', $y3, $m, $d) : null;
     }
     if (strpos($s, '/') !== false) {
-        $parts = array_values(array_filter(explode('/', $s), 'strlen'));
-        if (count($parts) >= 3) {
-            $a = (int)$parts[0];
-            $b = (int)$parts[1];
-            $c = (int)$parts[2];
+        $p = array_values(array_filter(explode('/', $s), 'strlen'));
+        if (count($p) >= 3) {
+            $a = (int)$p[0];
+            $b = (int)$p[1];
+            $c = (int)$p[2];
             $y = ($a <= 300) ? $a + 1911 : $a;
-            $m = $b;
-            $d = $c;
-            return checkdate($m, $d, $y) ? sprintf('%04d-%02d-%02d', $y, $m, $d) : null;
+            return checkdate($b, $c, $y) ? sprintf('%04d-%02d-%02d', $y, $b, $c) : null;
         }
     }
     $ts = strtotime($s);
@@ -99,53 +98,55 @@ try {
     $mode = $_GET['mode'] ?? 'status';
 
     if ($mode === 'status') {
-        $stmt = $pdo->query("SELECT COUNT(*) cnt, MAX(effective_date) latest_date, MAX(created_at) updated_at FROM {$table}");
-        echo json_encode($stmt->fetch(PDO::FETCH_ASSOC));
+        $st = $pdo->query("SELECT COUNT(*) cnt, MAX(effective_date) latest_date, MAX(created_at) updated_at FROM {$table}");
+        echo json_encode($st->fetch(PDO::FETCH_ASSOC));
         exit;
     }
 
-    if ($mode === 'refresh' || $mode === 'refresh_tmp') {
+    if ($mode === 'sync') {
         $raw = fetch_raw($url);
-        if (!$raw) throw new Exception('下載失敗');
+        if (!$raw) throw new Exception('來源無回應或 HTTP 錯誤');
         $j = json_decode($raw, true);
         $rows = $j['result']['records'] ?? null;
-        if (!is_array($rows)) throw new Exception('解析 JSON 失敗（無 records）');
+        if (!is_array($rows)) throw new Exception('來源 JSON 無 records');
 
-        $target = $mode === 'refresh' ? $table : $tmpTable;
         $pdo->beginTransaction();
         try {
-            if ($mode === 'refresh') {
+            try {
                 $pdo->exec("TRUNCATE TABLE {$table}");
-            } else {
-                $pdo->exec("CREATE TABLE IF NOT EXISTS {$tmpTable} LIKE {$table}");
-                $pdo->exec("TRUNCATE TABLE {$tmpTable}");
+            } catch (Throwable $e) {
+                $pdo->exec("DELETE FROM {$table}");
             }
 
-            $sql = "INSERT INTO {$target} (level_no,wage_min,wage_max,base_amount,category,effective_date)
-            VALUES (:level_no,:wage_min,:wage_max,:base_amount,:category,:effective_date)";
-            $stmt = $pdo->prepare($sql);
-
+            $sql = "INSERT INTO {$table} (level_no,wage_min,wage_max,base_amount,category,effective_date)
+            VALUES (:level_no,:wmin,:wmax,:base,:cat,:eff)";
+            $ins = $pdo->prepare($sql);
             $n = 0;
+
             foreach ($rows as $r) {
                 $level = coalesce($r['投保薪資等級'] ?? null, $r['等級'] ?? null, $r['級距'] ?? null);
-                $range = coalesce($r['月薪資總額'] ?? null, $r['實際薪資'] ?? null, $r['薪資範圍'] ?? null);
+                $range = coalesce($r['月薪資總額'] ?? null, $r['實際薪資'] ?? null, $r['薪資範圍'] ?? null, $r['月薪'] ?? null);
                 [$wmin, $wmax] = parse_range_to_minmax(is_string($range) ? $range : (string)$range);
-                $base  = coalesce($r['月投保薪資'] ?? null, $r['月投保金額'] ?? null, $r['投保金額'] ?? null);
-                $cat   = coalesce($r['身分別'] ?? null, $r['投保類別'] ?? null, '一般勞工');
-                $eff   = normalize_date(coalesce($r['生效日'] ?? null, $r['生效日期'] ?? null, $r['實施日期'] ?? null));
+                $base = coalesce($r['月投保薪資'] ?? null, $r['月投保金額'] ?? null, $r['投保金額'] ?? null, $r['投保薪資'] ?? null);
+                if (is_string($base)) $base = str_replace([',', '，', ' '], '', $base);
+                $base = is_numeric($base) ? (float)$base : null;
+                $cat = coalesce($r['身分別'] ?? null, $r['投保類別'] ?? null, '一般勞工');
+                $eff = normalize_date(coalesce($r['生效日'] ?? null, $r['生效日期'] ?? null, $r['實施日期'] ?? null));
 
-                $stmt->execute([
-                    ':level_no' => $level,
-                    ':wage_min' => $wmin,
-                    ':wage_max' => $wmax,
-                    ':base_amount' => $base,
-                    ':category' => $cat,
-                    ':effective_date' => $eff
+                if ($level === null || $base === null) continue;
+                $ins->execute([
+                    ':level_no' => (int)$level,
+                    ':wmin' => $wmin,
+                    ':wmax' => $wmax,
+                    ':base' => $base,
+                    ':cat' => $cat,
+                    ':eff' => $eff
                 ]);
                 $n++;
             }
+
             $pdo->commit();
-            echo json_encode(['ok' => true, 'target' => $target, 'count' => $n], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['ok' => true, 'inserted' => $n], JSON_UNESCAPED_UNICODE);
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -153,7 +154,7 @@ try {
         }
     }
 
-    throw new Exception('未知的 mode');
+    throw new Exception('unknown mode');
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);

@@ -75,7 +75,7 @@
     });
   }
 
-  // ---------- 儀表板專用區 ----------
+  // ---------- 儀表板 KPI ----------
   async function loadDashboard() {
     if (!$('#kpiEmployees')) return; // 只在 dashboard 執行
     try {
@@ -121,11 +121,42 @@
     btn.addEventListener('click', () => loadRecentChanges());
   }
 
+  // ---------- 新增：政府 OpenData 同步（背景執行，不擋頁面） ----------
+  const GOV_SYNC_ENDPOINTS = {
+    li:  '/api/opendata/gov_labor_insurance.php?mode=sync',
+    lp:  '/api/opendata/gov_labor_pension.php?mode=sync',
+    nhi: '/api/opendata/gov_nhi.php?mode=sync',
+  };
+  const notify = (detail) =>
+    window.dispatchEvent(new CustomEvent('govSyncProgress', { detail }));
+
+  async function fireAndForget(url, key) {
+    try {
+      notify({ service: key, status: 'running' });
+      // 不 await JSON、只 fire；避免阻塞頁面
+      await fetch(url, { method: 'GET', credentials: 'same-origin', cache: 'no-cache' });
+      notify({ service: key, status: 'done' });
+    } catch (e) {
+      notify({ service: key, status: 'error', message: String(e) });
+    }
+  }
+
+  function startGovOpendataSync() {
+    // 登入後一律啟動三支（符合你「每次登入就觸發」）
+    fireAndForget(GOV_SYNC_ENDPOINTS.li,  'li');
+    fireAndForget(GOV_SYNC_ENDPOINTS.lp,  'lp');
+    fireAndForget(GOV_SYNC_ENDPOINTS.nhi, 'nhi');
+  }
+
   // ---------- 初始化 ----------
   window.addEventListener('DOMContentLoaded', () => {
     loadUser();
     bindLogout();
     loadDashboard();
     bindReloadRecent();
+
+    // ★ 新增：登入後頁面載入，背景自動觸發政府資料同步
+    // 若你只想在 dashboard 觸發，把這行移到 loadDashboard() 裡面也可以。
+    startGovOpendataSync();
   });
 })();

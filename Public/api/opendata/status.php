@@ -1,48 +1,40 @@
 <?php
 // Public/api/opendata/status.php
-// 回傳政府資料同步狀態與目前三表的最新時間
-
+// 彙總三表現況 + 是否有 refresh_all 正在執行
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 $lockFile = __DIR__ . '/../../../temp/gov_refresh.lock';
+
+function is_running(string $file): bool {
+  if (!is_file($file)) return false;
+  $meta = @json_decode(@file_get_contents($file), true) ?: [];
+  if (empty($meta['running'])) return false;
+  $ts = (int)($meta['ts'] ?? 0);
+  return (time() - $ts) <= 600; // 10 分鐘過期保護
+}
 
 try {
   /** @var PDO $pdo */
   $pdo = require __DIR__ . '/../../../config/db.php';
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-  $running = false;
-  $job_id  = null;
-  if (is_file($lockFile)) {
-    $meta = @json_decode(@file_get_contents($lockFile), true) ?: [];
-    $running = !empty($meta['running']);
-    $job_id  = $meta['job_id'] ?? null;
-
-    // 簡單防呆：超過 10 分鐘視為異常/過期
-    $ts = (int)($meta['ts'] ?? 0);
-    if ($running && (time() - $ts) > 600) {
-      $running = false;
-    }
-  }
-
   $q = function(string $table) use ($pdo) {
-    $stmt = $pdo->query("SELECT MAX(effective_date) AS effective_date, MAX(created_at) AS updated_at, COUNT(*) AS cnt FROM {$table}");
+    $stmt = $pdo->query("SELECT COUNT(*) cnt, MAX(effective_date) latest_date, MAX(created_at) updated_at FROM {$table}");
     $r = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
     return [
-      'effective_date' => $r['effective_date'] ?: null,
-      'updated_at'     => $r['updated_at'] ?: null,
-      'count'          => (int)($r['cnt'] ?? 0),
+      'cnt'         => (int)($r['cnt'] ?? 0),
+      'latest_date' => $r['latest_date'] ?: null,
+      'updated_at'  => $r['updated_at'] ?: null,
     ];
   };
 
   echo json_encode([
     'ok'      => true,
-    'running' => $running,
-    'job_id'  => $job_id,
+    'running' => is_running($lockFile),
     'sources' => [
-      'lp'  => $q('gov_labor_pension'),
       'li'  => $q('gov_labor_insurance'),
+      'lp'  => $q('gov_labor_pension'),
       'nhi' => $q('gov_nhi'),
     ],
   ], JSON_UNESCAPED_UNICODE);

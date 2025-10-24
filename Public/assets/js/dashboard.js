@@ -1,12 +1,13 @@
 // Public/assets/js/dashboard.js
 // ------------------------------------------------------
-// 新增：政府 opendata 三卡狀態模組（LP/LI/NHI）
-// - 手動更新按鈕鎖定（背景跑時）
-// - 進頁即查狀態；running=true 時顯示轉圈並輪詢到完成
+// 政府 opendata 三卡狀態（LI/LP/NHI）
+// - 進頁先讀 status
+// - 監聽 app.js 的 govSyncProgress（登入時背景同步）
+// - 手動「立即更新」：同時觸發三支 sync 並輪詢 status
 // ------------------------------------------------------
 (() => {
   const BTN = document.getElementById('btnGovRefresh');
-  if (!BTN) return;
+  if (!BTN) return; // 只在有按鈕的頁面啟動（dashboard）
 
   const els = {
     lpEff: document.getElementById('lpEffective'),
@@ -20,10 +21,22 @@
     nhiSt: document.getElementById('nhiStatus'),
   };
 
-  let pollTimer = null;
+  const STATUS = {
+    li:  '/api/opendata/gov_labor_insurance.php?mode=status',
+    lp:  '/api/opendata/gov_labor_pension.php?mode=status',
+    nhi: '/api/opendata/gov_nhi.php?mode=status',
+  };
+  const SYNC = {
+    li:  '/api/opendata/gov_labor_insurance.php?mode=sync',
+    lp:  '/api/opendata/gov_labor_pension.php?mode=sync',
+    nhi: '/api/opendata/gov_nhi.php?mode=sync',
+  };
 
-  function setBtnState(running) {
-    if (running) {
+  let pollTimer = null;
+  const running = { li:false, lp:false, nhi:false };
+
+  function setBtnState(isRunning) {
+    if (isRunning) {
       BTN.disabled = true;
       BTN.title = '更新中，請稍後';
       BTN.setAttribute('aria-busy', 'true');
@@ -36,79 +49,98 @@
     }
   }
 
-  function setCardsRunning() {
-    ['lp','li','nhi'].forEach(k => {
-      const el = els[`${k}St`];
-      if (el) el.innerHTML = '<span class="spinner"></span> 同步中…';
-      const eff = els[`${k}Eff`]; if (eff && !eff.textContent) eff.textContent = '—';
-      const upd = els[`${k}Upd`]; if (upd && !upd.textContent) upd.textContent = '—';
-    });
+  function markCardUpdating(key) {
+    const st = els[`${key}St`];
+    if (st) st.innerHTML = '<span class="spinner"></span> 同步中…';
+  }
+  function clearCardStatus(key) {
+    const st = els[`${key}St`];
+    if (st) st.textContent = '';
+  }
+  function fillCard(key, data) {
+    const eff = els[`${key}Eff`];
+    const upd = els[`${key}Upd`];
+    if (eff) eff.textContent = data?.latest_date || '—';
+    if (upd) upd.textContent = data?.updated_at   || '—';
+    clearCardStatus(key);
   }
 
-  function fillCard(k, src) {
-    (els[`${k}Eff`]||{}).textContent = src?.effective_date || '—';
-    (els[`${k}Upd`]||{}).textContent = src?.updated_at     || '—';
-    (els[`${k}St`] || {}).textContent = ''; // 清除狀態
-  }
-
-  async function fetchStatus() {
-    const r = await fetch('/api/opendata/refresh_all.php?mode=status', { credentials: 'same-origin' });
-    const j = await r.json().catch(() => ({}));
-    return j;
-  }
-
-  async function refreshStatus(andStartPoll = false) {
+  async function getStatusOne(key) {
     try {
-      const j = await fetchStatus();
-      const running = !!j.running;
-      setBtnState(running);
-      if (running) {
-        setCardsRunning();
-        if (andStartPoll && !pollTimer) {
-          pollTimer = setInterval(async () => {
-            try {
-              const s = await fetchStatus();
-              if (!s.running) {
-                clearInterval(pollTimer); pollTimer = null;
-                setBtnState(false);
-                fillCard('lp', s.sources?.lp);
-                fillCard('li', s.sources?.li);
-                fillCard('nhi', s.sources?.nhi);
-              }
-            } catch (e) {
-              // 忽略暫時錯誤，繼續輪詢
-            }
-          }, 3000);
-        }
-      } else {
-        fillCard('lp', j.sources?.lp);
-        fillCard('li', j.sources?.li);
-        fillCard('nhi', j.sources?.nhi);
+      const r = await fetch(STATUS[key], { credentials: 'same-origin', cache: 'no-cache' });
+      const j = await r.json().catch(() => null);
+      return j || {};
+    } catch {
+      return {};
+    }
+  }
+  async function refreshAllStatus() {
+    const [li, lp, nhi] = await Promise.all([getStatusOne('li'), getStatusOne('lp'), getStatusOne('nhi')]);
+    fillCard('li', li);
+    fillCard('lp', lp);
+    fillCard('nhi', nhi);
+  }
+
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(async () => {
+      await refreshAllStatus();
+      // 若都不在 running 就停輪詢與解鎖按鈕
+      if (!running.li && !running.lp && !running.nhi) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        setBtnState(false);
       }
-    } catch (e) {
-      console.warn('status failed', e);
-    }
+    }, 3000);
   }
 
-  async function triggerRefresh() {
-    // 先鎖住＋顯示轉圈（避免競速）
-    setBtnState(true);
-    setCardsRunning();
+  async function triggerSyncOne(key) {
     try {
-      const r = await fetch('/api/opendata/refresh_all.php?mode=refresh&async=1', { credentials: 'same-origin' });
-      await r.json().catch(() => ({}));
-      // 不論回傳如何，只要可能在跑就開始輪詢
-      refreshStatus(true);
+      running[key] = true;
+      markCardUpdating(key);
+      await fetch(SYNC[key], { credentials: 'same-origin', cache: 'no-cache' });
+      // 不等待 JSON，讓它在背景完成
     } catch (e) {
-      // 連啟動都失敗 → 解鎖
-      setBtnState(false);
-      (els.lpSt||{}).textContent = '啟動失敗';
-      (els.liSt||{}).textContent = '啟動失敗';
-      (els.nhiSt||{}).textContent = '啟動失敗';
+      const st = els[`${key}St`];
+      if (st) st.textContent = '啟動失敗';
+      running[key] = false;
     }
   }
 
-  BTN.addEventListener('click', triggerRefresh);
-  // 進頁：讀一次狀態，若在跑就開始輪詢
-  refreshStatus(true);
+  async function triggerAllSync() {
+    setBtnState(true);
+    markCardUpdating('li'); markCardUpdating('lp'); markCardUpdating('nhi');
+    running.li = running.lp = running.nhi = true;
+
+    // 並行啟動三支
+    triggerSyncOne('li');
+    triggerSyncOne('lp');
+    triggerSyncOne('nhi');
+
+    // 開始輪詢直到完成
+    startPolling();
+  }
+
+  // 監聽 app.js 發出的事件：登入後自動同步時即時顯示「同步中」
+  window.addEventListener('govSyncProgress', (ev) => {
+    const { service, status } = ev.detail || {};
+    if (!service) return;
+    if (status === 'running') {
+      running[service] = true;
+      markCardUpdating(service);
+      setBtnState(true);
+      startPolling();
+    } else if (status === 'done' || status === 'error') {
+      running[service] = false;
+      // 狀態會在輪詢取回後覆蓋顯示
+    }
+  });
+
+  // 綁定手動按鈕
+  BTN.addEventListener('click', triggerAllSync);
+
+  // 進頁先載入一次狀態
+  document.addEventListener('DOMContentLoaded', () => {
+    refreshAllStatus();
+  });
 })();

@@ -1,311 +1,355 @@
 <?php
 // Public/api/opendata/gov_nhi.php
+// 目的：下載健保資料集（指定或最新版本）、解析為欄位，寫入 gov_nhi；最後把該 rid 標記為 IMPORTED
+// 相依：config/db.php 會提供 $pdo；gov_nhi_state / gov_nhi_versions；gov_nhi 主表（你已提供）
+// PHP 7.2 相容
+
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
-require_once __DIR__ . '/../../../config/db.php'; // 應提供 $pdo (PDO)
+require_once __DIR__ . '/../../../config/db.php'; // 需建立 $pdo (PDO)
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-$USE_LOCAL_FILE_FOR_TEST = isset($_GET['local']) && $_GET['local'] === '1';
-$DEBUG = isset($_GET['debug']) && $_GET['debug'] === '1';
-$LOCAL_CSV_PATH = '/mnt/data/A21030000I-B1000A-00F.csv';
+const DATASET_API_BASE = 'https://info.nhi.gov.tw/api/iode0000s01/Dataset?rId=';
 
-const DATASET_URL = 'https://data.gov.tw/dataset/20251';
-
-/* ------------------ HTTP 工具 ------------------ */
-function http_get(string $url): ?string {
-    if (function_exists('curl_init')) {
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_CONNECTTIMEOUT => 12,
-            CURLOPT_TIMEOUT => 25,
-            CURLOPT_USERAGENT => 'Mozilla/5.0 (wm_payroll gov_nhi sync)',
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
-            CURLOPT_HTTPHEADER => ['Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'],
-        ]);
-        $body = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        return ($body !== false && $code >= 200 && $code < 400) ? (string)$body : null;
+// -----------------------------
+// 小工具：讀目前 prefix 與 last_rid
+// -----------------------------
+function current_state(PDO $pdo): array {
+    $row = $pdo->query("SELECT prefix, last_rid FROM gov_nhi_state WHERE id=1")->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        throw new RuntimeException('gov_nhi_state 尚未初始化');
     }
-    $ctx = stream_context_create([
-        'http' => ['method' => 'GET','timeout' => 25,'header' => "User-Agent: Mozilla/5.0 (wm_payroll gov_nhi sync)\r\nAccept: text/html\r\n"],
-        'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+    if (!$row['prefix']) {
+        throw new RuntimeException('gov_nhi_state.prefix 未設定');
+    }
+    return $row;
+}
+
+// -----------------------------
+// 小工具：HTTP 下載
+// -----------------------------
+function http_get(string $url, int $timeout = 30): array {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_HEADER => true,
+        CURLOPT_NOBODY => false,
     ]);
-    $body = @file_get_contents($url, false, $ctx);
-    return ($body !== false) ? (string)$body : null;
-}
+    $resp = curl_exec($ch);
+    $errno = curl_errno($ch);
+    $err  = curl_error($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    curl_close($ch);
 
-/* ------------------ 版本/時間 解析 ------------------ */
-function parse_year_month_rank(string $text): ?array {
-    $t = mb_strtolower($text, 'UTF-8');
-    $months = ['january'=>1,'february'=>2,'march'=>3,'april'=>4,'may'=>5,'june'=>6,'july'=>7,'august'=>8,'september'=>9,'october'=>10,'november'=>11,'december'=>12];
-    foreach ($months as $name => $m) {
-        if (strpos($t, $name) !== false && preg_match('/\b(20\d{2})\b/', $t, $m1)) return ['y'=>(int)$m1[1],'m'=>$m];
+    if ($resp === false) {
+        throw new RuntimeException("cURL error ($errno): $err");
     }
-    if (preg_match('/\b(1\d{2})\s*年(?:\s*(\d{1,2})\s*月)?/u', $text, $m2)) {
-        return ['y'=>(int)$m2[1]+1911,'m'=> isset($m2[2])?max(1,min(12,(int)$m2[2])):12];
-    }
-    if (preg_match('/\b(1\d{2})\b/u', $text, $m3)) return ['y'=>(int)$m3[1]+1911,'m'=>12];
-    if (preg_match('/\b(20\d{2})\b/', $t, $m4)) return ['y'=>(int)$m4[1],'m'=>12];
-    return null;
-}
-function parse_quality_time(string $segment): ?int {
-    if (preg_match('/品質檢測時間[^0-9]*(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/u', $segment, $m)) {
-        $ts = strtotime($m[1].' '.$m[2]); return $ts!==false?$ts:null;
-    }
-    return null;
-}
+    $headersRaw = substr($resp, 0, $headerSize);
+    $body = substr($resp, $headerSize);
 
-/* ------------------ 抓取 & 擷取 CSV 候選 ------------------ */
-function find_latest_csv_from_dataset(string $datasetUrl): array {
-    $html = http_get($datasetUrl);
-    if (!$html) throw new RuntimeException('無法下載 dataset 頁面');
-
-    $dom = new DOMDocument(); libxml_use_internal_errors(true); $dom->loadHTML($html); libxml_clear_errors();
-    $xp = new DOMXPath($dom);
-
-    $nodes = $xp->query('//a[contains(translate(@href,"CSV","csv"), ".csv") or contains(@href,"download") or contains(@href,"dq_download_csv")]');
-
-    $candidates = []; $order = 0; $rawHtml = $html;
-    foreach ($nodes as $a) {
-        /** @var DOMElement $a */
-        $href = trim($a->getAttribute('href')); if ($href==='') continue;
-        if (strpos($href, 'http') !== 0) {
-            $base = parse_url($datasetUrl);
-            $href = $base['scheme'].'://'.$base['host'].(isset($base['port'])?':'.$base['port']:'').'/'.ltrim($href,'/');
+    // 取 Content-Type
+    $contentType = '';
+    foreach (explode("\r\n", $headersRaw) as $h) {
+        if (stripos($h, 'Content-Type:') === 0) {
+            $contentType = trim(substr($h, strlen('Content-Type:')));
+            break;
         }
-        $text = trim(preg_replace('/\s+/', ' ', $a->textContent ?? ''));
-        $rank = parse_year_month_rank($text);
+    }
 
-        $pos = mb_stripos($rawHtml, $href); $quality_ts = null;
-        if ($pos !== false) {
-            $segment = mb_substr($rawHtml, max(0,$pos-800), 1600);
-            $quality_ts = parse_quality_time($segment);
-            if (!$rank) {
-                $seg_txt = html_entity_decode(strip_tags($segment), ENT_QUOTES|ENT_HTML5, 'UTF-8');
-                $rank = parse_year_month_rank($seg_txt);
+    return ['status' => $status, 'content_type' => $contentType, 'body' => $body];
+}
+
+// -----------------------------
+// 內容判定：JSON or CSV
+// -----------------------------
+function is_json_payload(string $body): bool {
+    $trim = ltrim($body);
+    if ($trim === '' || ($trim[0] !== '{' && $trim[0] !== '[')) return false;
+    json_decode($body, true);
+    return (json_last_error() === JSON_ERROR_NONE);
+}
+
+// -----------------------------
+// CSV 解析（簡易 parser：支援引號、逗點；假設 UTF-8）
+// -----------------------------
+function parse_csv_to_rows(string $csv): array {
+    $rows = [];
+    $fp = fopen('php://temp', 'r+');
+    fwrite($fp, $csv);
+    rewind($fp);
+    $header = null;
+    while (($cols = fgetcsv($fp)) !== false) {
+        if ($cols === [null] || count($cols) === 0) continue;
+        if ($header === null) {
+            $header = $cols;
+            continue;
+        }
+        $row = [];
+        foreach ($header as $i => $colName) {
+            $row[$colName] = $cols[$i] ?? null;
+        }
+        $rows[] = $row;
+    }
+    fclose($fp);
+    return $rows;
+}
+
+// -----------------------------
+// JSON 解析 → rows
+// 支援常見格式：直接陣列；或 {data: [...]}；或 {result: {..., records: [...]}} 等
+// -----------------------------
+function parse_json_to_rows(array $data): array {
+    // 直接是 array of rows
+    if (isset($data[0]) && is_array($data[0])) {
+        return $data;
+    }
+    // 常見包裝
+    if (isset($data['data']) && is_array($data['data'])) {
+        return $data['data'];
+    }
+    if (isset($data['result']['records']) && is_array($data['result']['records'])) {
+        return $data['result']['records'];
+    }
+    if (isset($data['records']) && is_array($data['records'])) {
+        return $data['records'];
+    }
+    // 嘗試找第一個 array
+    foreach ($data as $v) {
+        if (is_array($v) && isset($v[0]) && is_array($v[0])) return $v;
+    }
+    return [];
+}
+
+// -----------------------------
+// 欄位對應：嘗試從多種欄名/格式抓對應資訊
+// - level_no：可能叫 等級/級距/序號/No 等
+// - wage_min / wage_max：可能叫 自/至/起/迄/下限/上限
+// - base_amount：投保金額/月投保金額
+// - group_code：類別代號/對象別代碼
+// - effective_date：生效/實施/發布 日期（YYYY-MM-DD 或 民國年）
+// -----------------------------
+function normalize_row(array $r): array {
+    // 先把鍵全部 trim、統一
+    $norm = [];
+    foreach ($r as $k => $v) {
+        $kk = trim((string)$k);
+        $norm[$kk] = (is_string($v)) ? trim($v) : $v;
+    }
+
+    $get = function(array $candidates) use ($norm) {
+        foreach ($candidates as $c) {
+            foreach ($norm as $k => $v) {
+                if (mb_strtolower($k) === mb_strtolower($c)) return $v;
             }
         }
-        $candidates[] = ['href'=>$href,'text'=>$text,'rank'=>$rank,'quality_ts'=>$quality_ts,'order'=>$order++];
-    }
-    if (!$candidates) throw new RuntimeException('找不到任何 CSV 連結候選');
-
-    usort($candidates, function($a,$b){
-        $ra=$a['rank']; $rb=$b['rank'];
-        if ($ra && $rb) { if ($ra['y']!==$rb['y']) return $rb['y']<=>$ra['y']; if (($ra['m']??0)!==($rb['m']??0)) return ($rb['m']??0)<=>($ra['m']??0); }
-        elseif ($ra && !$rb) return -1; elseif (!$ra && $rb) return 1;
-        $qa=$a['quality_ts']??0; $qb=$b['quality_ts']??0; if ($qa!==$qb) return $qb<=>$qa;
-        return $b['order']<=>$a['order'];
-    });
-
-    $best = $candidates[0];
-    $y = $best['rank']['y'] ?? null; $m = $best['rank']['m'] ?? 12;
-    $effective_date = $y ? sprintf('%04d-%02d-01',$y,$m) : date('Y-m-01');
-
-    return ['csv_url'=>$best['href'],'version'=>$best['rank'],'quality_ts'=>$best['quality_ts'],'effective_date'=>$effective_date,'picked_from'=>$best,'stats'=>['total_candidates'=>count($candidates)]];
-}
-
-/* ------------------ CSV 解析 ------------------ */
-function normalize_to_utf8(string $bytes): string {
-    $enc = mb_detect_encoding($bytes, ['UTF-8','BIG5','CP950','EUC-TW','ISO-8859-1'], true);
-    if ($enc && $enc!=='UTF-8') { $converted=@iconv($enc,'UTF-8//IGNORE',$bytes); if ($converted!==false) return $converted; }
-    return preg_replace('/^\xEF\xBB\xBF/', '', $bytes);
-}
-function parse_csv_to_array(string $csv): array {
-    $csv = str_replace("\r\n","\n",$csv);
-    $lines = explode("\n", trim($csv));
-    if (!$lines) return [];
-    $header = str_getcsv(array_shift($lines));
-    // 標準化欄名：去空白、全形括號轉半形
-    $header = array_map(function($h){ $h=trim((string)$h); $h=str_replace(['（','）'],['(',')'],$h); return $h; }, $header);
-
-    $rows = [];
-    foreach ($lines as $ln) {
-        if (trim($ln)==='') continue;
-        $cols = str_getcsv($ln);
-        if (count($cols) < 1) continue;
-        if (count($cols) !== count($header)) {
-            if (count($cols) < floor(count($header)*0.6)) continue;
-            $cols = array_pad($cols, count($header), null);
-            $cols = array_slice($cols, 0, count($header));
+        // 也嘗試模糊包含
+        foreach ($candidates as $c) {
+            foreach ($norm as $k => $v) {
+                if (mb_stripos($k, $c) !== false) return $v;
+            }
         }
-        $r=[];
-        foreach ($header as $i=>$h) { $v=isset($cols[$i])?trim((string)$cols[$i]):null; $r[$h]= $v!==''?$v:null; }
-        $rows[]=$r;
-    }
-    return ['header'=>$header,'rows'=>$rows];
-}
+        return null;
+    };
 
-/* ------------------ 工具：範圍與數值 ------------------ */
-function parse_money(?string $s): ?float {
-    if ($s===null||$s==='') return null;
-    $s = str_replace(['，',',',' '],['','',''],$s);
-    $s = preg_replace('/[^\d\.]/u','',$s);
-    return $s===''?null:(float)$s;
-}
-function parse_range(string $s): array {
-    $sep='～|~|-|–|至|—|──|~|－';
-    if (preg_match('/(\d[\d,，\.]*)\s*(?:'.$sep.')\s*(\d[\d,，\.]*)/u', $s, $m)) {
-        $a=parse_money($m[1]); $b=parse_money($m[2]);
-        if ($a!==null && $b!==null) { if ($a>$b){$t=$a;$a=$b;$b=$t;} return [$a,$b]; }
-    }
-    $v=parse_money($s); return [$v,$v];
-}
-
-/* ------------------ 欄位偵測輔助（模糊匹配） ------------------ */
-function find_col(array $header, array $keywords): ?string {
-    // 將欄名正規化（全形→半形、空白移除）
-    $norm = [];
-    foreach ($header as $h) {
-        $key = preg_replace('/\s+/u','', str_replace(['（','）'],['(',')'],$h));
-        $norm[$key] = $h; // 保留原欄名
-    }
-    foreach ($norm as $k=>$orig) {
-        $k_lower = mb_strtolower($k,'UTF-8');
-        $ok=true;
-        foreach ($keywords as $kw) {
-            if (mb_strpos($k_lower, $kw) === false) { $ok=false; break; }
-        }
-        if ($ok) return $orig;
-    }
-    return null;
-}
-
-/* ------------------ 欄位對應（強化版） ------------------ */
-function map_row_to_nhi(array $row, array $header, int $fallbackLevelNo, array $detectCols): array {
     // level_no
-    $level_no = null;
-    $levelCandidates = ['投保等級','等級','級距','等第','級距序','等','級距代碼','Level','No'];
-    foreach ($levelCandidates as $c) if (array_key_exists($c,$row) && $row[$c]!==null) { $level_no=(int)preg_replace('/[^\d]/','',$row[$c]); break; }
-    if (!$level_no) $level_no = $fallbackLevelNo;
+    $level = $get(['等級', '級距', '級次', '序號', 'level', 'no', '項次', '項目序號']);
+    if ($level === null) {
+        // 若有「級距起迄」，可以用遞增在外面處理；這裡先留 null
+    } else {
+        // 清掉非數字
+        $level = preg_replace('/[^\d]/', '', (string)$level);
+        $level = ($level === '') ? null : (int)$level;
+    }
+
+    // wage_min / wage_max
+    $min = $get(['自', '起', '下限', '最低', '金額自', '級距自', '區間起', 'wage_min', 'min']);
+    $max = $get(['至', '迄', '上限', '最高', '金額至', '級距至', '區間迄', 'wage_max', 'max']);
+
+    // base_amount（若資料集只有單一金額欄）
+    $base = $get(['投保金額', '月投保金額', '基數', '保險金額', '保險投保金額', 'base_amount', '金額']);
 
     // group_code
-    $group_code = null;
-    $groupCandidates = ['組別級距','類別','身分別','身份別','身份類別','身份代碼','身份','類別代碼','Group','group_code'];
-    foreach ($groupCandidates as $c) if (isset($row[$c]) && $row[$c]!==null) { $group_code=(string)$row[$c]; break; }
+    $group = $get(['類別代號', '身分類別代號', '投保對象別代碼', 'group_code', '類別']);
 
-    // 金額來源欄
-    $base_amount = null; $wage_min = null; $wage_max = null;
+    // effective_date（盡量抓 YYYY-MM-DD；若是民國年，自行轉）
+    $eff = $get(['生效日期', '實施日期', '發布日期', 'effective_date', '起始日期', '適用日期']);
+    $eff = normalize_date($eff);
 
-    // 先用偵測到的欄位名（模糊規則找出來的）
-    $col_base = $detectCols['base_amount'] ?? null;     // 例如：月投保金額（元）
-    $col_range = $detectCols['salary_range'] ?? null;   // 例如：實際薪資月額（元）
+    // 金額轉 decimal
+    $toDecimal = function($x) {
+        if ($x === null || $x === '') return null;
+        // 去除千分位與非數字符號
+        $v = str_replace([',', '，'], '', (string)$x);
+        $v = preg_replace('/[^\d.\-]/', '', $v);
+        return ($v === '' || $v === '-' ) ? null : (float)$v;
+    };
 
-    if ($col_base && isset($row[$col_base])) $base_amount = parse_money($row[$col_base]);
-    if ($col_range && isset($row[$col_range])) list($wage_min,$wage_max)=parse_range($row[$col_range] ?? '');
-
-    // 退路：常見別名
-    if ($base_amount===null) {
-        $baseFields = ['月投保金額（元）','月投保金額(元)','投保金額','投保薪資','級距金額','保險金額','月投保金額','base_amount'];
-        foreach ($baseFields as $c) if (isset($row[$c]) && $row[$c]!==null) { $base_amount=parse_money($row[$c]); break; }
-    }
-    if ($wage_min===null && $wage_max===null) {
-        $rangeFields = ['實際薪資月額（元）','實際薪資月額(元)','實際薪資','薪資月額','投保薪資範圍','投保薪資（範圍）','薪資區間','級距範圍'];
-        foreach ($rangeFields as $c) if (isset($row[$c]) && $row[$c]!==null) { list($wage_min,$wage_max)=parse_range($row[$c]); break; }
-    }
-
-    // 若沒有區間，使用 base_amount 當單點
-    if ($wage_min===null && $wage_max===null && $base_amount!==null) { $wage_min=$base_amount; $wage_max=$base_amount; }
-
-    // 正常化
-    if ($wage_min!==null && $wage_max!==null && $wage_min>$wage_max) { $t=$wage_min; $wage_min=$wage_max; $wage_max=$t; }
+    $wmin = $toDecimal($min);
+    $wmax = $toDecimal($max);
+    $baseAmt = $toDecimal($base);
 
     return [
-        'level_no'    => $level_no,
-        'wage_min'    => $wage_min,
-        'wage_max'    => $wage_max,
-        'base_amount' => $base_amount,
-        'group_code'  => $group_code,
+        'level_no'      => $level,
+        'wage_min'      => $wmin,
+        'wage_max'      => $wmax,
+        'base_amount'   => $baseAmt,
+        'group_code'    => ($group === null ? null : (string)$group),
+        'effective_date'=> $eff,
     ];
 }
 
-/* ------------------ DB 寫入 ------------------ */
-function upsert_gov_nhi(PDO $pdo, array $rows, string $effectiveDate, string $resourceId): int {
-    if (!$rows) return 0;
-    $pdo->prepare("DELETE FROM gov_nhi WHERE effective_date = ?")->execute([$effectiveDate]);
-    $stmt = $pdo->prepare("INSERT INTO gov_nhi (level_no,wage_min,wage_max,base_amount,group_code,resource_id,effective_date)
-                           VALUES (:level_no,:wage_min,:wage_max,:base_amount,:group_code,:resource_id,:effective_date)");
-    $n=0; foreach ($rows as $r) { $stmt->execute([
-        ':level_no'=>$r['level_no'], ':wage_min'=>$r['wage_min'], ':wage_max'=>$r['wage_max'],
-        ':base_amount'=>$r['base_amount'], ':group_code'=>$r['group_code'],
-        ':resource_id'=>$resourceId, ':effective_date'=>$effectiveDate
-    ]); $n++; }
-    return $n;
+// 民國年或常見日期轉 YYYY-MM-DD
+function normalize_date($s): ?string {
+    if (!$s) return null;
+    $s = trim((string)$s);
+    if ($s === '') return null;
+
+    // 已經像 2024-12-26 / 2024/12/26
+    if (preg_match('/^\d{4}[-\/]\d{1,2}[-\/]\d{1,2}$/', $s)) {
+        $s = str_replace('/', '-', $s);
+        $t = strtotime($s);
+        return $t ? date('Y-m-d', $t) : null;
+    }
+
+    // 民國年：113/12/26 or 113-12-26
+    if (preg_match('/^(\d{2,3})[\/\-](\d{1,2})[\/\-](\d{1,2})$/', $s, $m)) {
+        $y = (int)$m[1] + 1911;
+        $mm = (int)$m[2];
+        $dd = (int)$m[3];
+        return sprintf('%04d-%02d-%02d', $y, $mm, $dd);
+    }
+
+    // 一般中文日期：113年12月26日
+    if (preg_match('/^(\d{2,3})年(\d{1,2})月(\d{1,2})日$/u', $s, $m)) {
+        $y = (int)$m[1] + 1911;
+        $mm = (int)$m[2];
+        $dd = (int)$m[3];
+        return sprintf('%04d-%02d-%02d', $y, $mm, $dd);
+    }
+
+    // 單純年/月（最後回傳月初）
+    if (preg_match('/^(\d{4})[-\/](\d{1,2})$/', $s, $m)) {
+        return sprintf('%04d-%02d-01', (int)$m[1], (int)$m[2]);
+    }
+    if (preg_match('/^(\d{2,3})年(\d{1,2})月$/u', $s, $m)) {
+        $y = (int)$m[1] + 1911;
+        return sprintf('%04d-%02d-01', $y, (int)$m[2]);
+    }
+
+    // 無法判讀就丟 null
+    return null;
 }
 
-/* ------------------ 主程式 ------------------ */
+// -----------------------------
+// 主流程
+// -----------------------------
+$res = ['ok'=>false, 'rid'=>null, 'resource_id'=>null, 'imported_rows'=>0, 'skipped_rows'=>0, 'msg'=>null, 'error'=>null];
+
 try {
-    if ($USE_LOCAL_FILE_FOR_TEST) {
-        if (!is_file($LOCAL_CSV_PATH)) throw new RuntimeException('找不到本地 CSV：'.$LOCAL_CSV_PATH);
-        $csvBytes = file_get_contents($LOCAL_CSV_PATH);
-        $effectiveDate = '2025-01-01';
-        $csvUrl = 'file://'.basename($LOCAL_CSV_PATH);
+    // 取得 rid：優先 querystring ?rid=（三碼），否則取 state.last_rid
+    $queryRid = isset($_GET['rid']) ? trim((string)$_GET['rid']) : null;
+    $state = current_state($pdo);
+    $prefix = $state['prefix'];
+    $rid    = $queryRid ?: $state['last_rid'];
+
+    if (!$rid) {
+        throw new RuntimeException('沒有可用的 rid，請先執行版本掃描（gov_nhi_versions.php）或提供 ?rid=');
+    }
+
+    $resourceIdFull = $prefix . $rid;
+    $url = DATASET_API_BASE . rawurlencode($resourceIdFull);
+
+    $http = http_get($url, 45);
+    if ($http['status'] !== 200 || !$http['body']) {
+        throw new RuntimeException("下載失敗，HTTP {$http['status']}");
+    }
+
+    // 解析成 rows
+    $rows = [];
+    if (is_json_payload($http['body'])) {
+        $data = json_decode($http['body'], true);
+        $rows = parse_json_to_rows($data);
     } else {
-        $pick = find_latest_csv_from_dataset(DATASET_URL);
-        $csvUrl = $pick['csv_url'];
-        $effectiveDate = $pick['effective_date'];
-        $csvBytes = http_get($csvUrl);
-        if (!$csvBytes || strlen($csvBytes) < 64) throw new RuntimeException('CSV 下載失敗或內容異常：'.$csvUrl);
+        // 可能是 CSV
+        $rows = parse_csv_to_rows($http['body']);
     }
 
-    $utf8 = normalize_to_utf8($csvBytes);
-    $parsed = parse_csv_to_array($utf8);
-    $header = $parsed['header'] ?? [];
-    $rowsRaw = $parsed['rows'] ?? [];
-    if (!$rowsRaw) throw new RuntimeException('CSV 解析不到資料列（檢查是否分隔符/編碼/空白列）');
-
-    // ---- 欄位模糊偵測（關鍵詞都需包含；已把全形括號轉半形處理） ----
-    $col_base = find_col($header, ['月','投保','金額']);      // 例如：月投保金額（元）
-    $col_range = find_col($header, ['薪資','月','額']);       // 例如：實際薪資月額（元）
-    // 若偵測不到，試英文/別名
-    if (!$col_base)  $col_base  = find_col($header, ['base']) ?: find_col($header, ['投保','金額']);
-    if (!$col_range) $col_range = find_col($header, ['實際','薪資']) ?: find_col($header, ['薪資','區間']);
-
-    $detectCols = ['base_amount'=>$col_base, 'salary_range'=>$col_range];
-
-    // ---- 映射 ----
-    $mapped=[]; $lvl=1;
-    foreach ($rowsRaw as $row) {
-        $m = map_row_to_nhi($row, $header, $lvl, $detectCols);
-        if ($m['wage_min']===null && $m['wage_max']===null && $m['base_amount']===null) { $lvl++; continue; }
-        $mapped[]=$m; $lvl++;
+    if (!$rows || !is_array($rows) || count($rows) === 0) {
+        throw new RuntimeException('資料內容為空或無法解析成列');
     }
 
-    if (!$mapped) {
-        if ($DEBUG) {
-            echo json_encode([
-                'ok'=>false,
-                'error'=>'無法對應任何有效的級距金額欄位',
-                'detected_cols'=>$detectCols,
-                'headers'=>$header,
-                'sample_rows'=>array_slice($rowsRaw,0,5),
-                'csv_url'=>$csvUrl,
-                'effective_date'=>$effectiveDate,
-            ], JSON_UNESCAPED_UNICODE);
-            exit;
-        }
-        throw new RuntimeException('無法對應任何有效的級距金額欄位，請檢查 CSV 欄名');
-    }
-
-    // ---- 寫 DB ----
+    // 先刪除同 resource_id 的舊資料（確保 idempotent）
+    $delStmt = $pdo->prepare("DELETE FROM gov_nhi WHERE resource_id = ?");
     $pdo->beginTransaction();
-    $resourceId = substr(sha1($csvUrl), 0, 40);
-    $n = upsert_gov_nhi($pdo, $mapped, $effectiveDate, $resourceId);
+    $delStmt->execute([$resourceIdFull]);
+
+    // 準備 insert
+    $ins = $pdo->prepare("
+        INSERT INTO gov_nhi
+        (level_no, wage_min, wage_max, base_amount, group_code, resource_id, effective_date)
+        VALUES (?,?,?,?,?,?,?)
+    ");
+
+    $imported = 0; $skipped = 0;
+    $autoLevel = 0;
+
+    foreach ($rows as $r) {
+        if (!is_array($r)) { $skipped++; continue; }
+
+        $n = normalize_row($r);
+
+        // 若 level_no 缺，給遞增序號
+        if ($n['level_no'] === null) {
+            $autoLevel++;
+            $n['level_no'] = $autoLevel;
+        } else {
+            // 同時更新 autoLevel 以免重覆
+            $autoLevel = max($autoLevel, (int)$n['level_no']);
+        }
+
+        // 只要最低限度：base_amount 或 (wage_min/wage_max 任一) 有值才寫入，避免空行
+        $hasAnyAmount = ($n['base_amount'] !== null) || ($n['wage_min'] !== null) || ($n['wage_max'] !== null);
+        if (!$hasAnyAmount) { $skipped++; continue; }
+
+        $ins->execute([
+            $n['level_no'],
+            $n['wage_min'],
+            $n['wage_max'],
+            $n['base_amount'],
+            $n['group_code'],
+            $resourceIdFull,
+            $n['effective_date'],
+        ]);
+        $imported++;
+    }
+
+    // 將版本標記為 IMPORTED（若已存在就更新）
+    $now = date('Y-m-d H:i:s');
+    $pdo->prepare("
+        INSERT INTO gov_nhi_versions (rid, resource_id_full, fetched_at, status)
+        VALUES (?,?,?,?)
+        ON DUPLICATE KEY UPDATE status=VALUES(status), fetched_at=VALUES(fetched_at)
+    ")->execute([$rid, $resourceIdFull, $now, 'IMPORTED']);
+
     $pdo->commit();
 
-    echo json_encode([
-        'ok'=>true,
-        'csv_url'=>$csvUrl,
-        'effective_date'=>$effectiveDate,
-        'inserted'=>$n,
-        'detected_cols'=>$detectCols,
-    ], JSON_UNESCAPED_UNICODE);
+    $res['ok'] = true;
+    $res['rid'] = $rid;
+    $res['resource_id'] = $resourceIdFull;
+    $res['imported_rows'] = $imported;
+    $res['skipped_rows'] = $skipped;
+    $res['msg'] = "gov_nhi 已寫入（IMPORTED=$imported, SKIPPED=$skipped）";
 
 } catch (Throwable $e) {
-    if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) $pdo->rollBack();
-    http_response_code(500);
-    echo json_encode(['ok'=>false,'error'=>$e->getMessage()], JSON_UNESCAPED_UNICODE);
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    $res['error'] = $e->getMessage();
 }
+
+echo json_encode($res, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);

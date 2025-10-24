@@ -34,33 +34,32 @@ function fetch_json($url){
 }
 
 function latest_nhi_identifier() {
-  // 依健保署開放資料 API，抓取最新版本的「投保金額分級表」
-  $dsUrl = 'https://info.nhi.gov.tw/api/iode0010/v1/rest/dataset?limit=200&offset=0';
+  // 只抓 B1000A 這個群組，並以「投保金額分級表」關鍵字過濾，取修改時間最新的 identifier
+  $dsUrl = 'https://info.nhi.gov.tw/api/iode0010/v1/rest/dataset?groupCode=B1000A&limit=200&offset=0&q=' . urlencode('投保金額分級表');
   $ds = fetch_json($dsUrl);
-  if (!isset($ds['result']['records']) || !is_array($ds['result']['records'])) {
+  $records = $ds['result']['records'] ?? null;
+  if (!is_array($records)) {
     throw new Exception('取得資料集清單失敗');
   }
 
   $candidates = [];
-  foreach ($ds['result']['records'] as $rec) {
+  foreach ($records as $rec) {
     $id  = $rec['identifier'] ?? '';
     $ttl = ($rec['title'] ?? '') . ' ' . ($rec['notes'] ?? '') . ' ' . ($rec['description'] ?? '');
-    // ✅ 僅挑出 group_code=B1000A 且標題含「投保金額分級表」
     if (strpos($id, 'A21030000I-B1000A-') === 0 && mb_strpos($ttl, '投保金額分級表') !== false) {
       $modified = $rec['modified'] ?? $rec['metadata_modified'] ?? '';
       $candidates[] = ['identifier' => $id, 'modified' => $modified];
     }
   }
 
-  if (empty($candidates)) {
-    // 若沒有找到任何符合項目，回退到目前 114 年版
+  if (!$candidates) {
+    // 安全退回到已知版本
     return 'A21030000I-B1000A-00F';
   }
-
-  // 依修改時間由新到舊排序，取最新的 identifier
-  usort($candidates, fn($a, $b) => strcmp($b['modified'] ?? '', $a['modified'] ?? ''));
+  usort($candidates, fn($a,$b) => strcmp($b['modified'] ?? '', $a['modified'] ?? ''));
   return $candidates[0]['identifier'];
 }
+
 
 
 function parse_group_code($identifier){

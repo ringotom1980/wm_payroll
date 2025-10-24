@@ -1,161 +1,126 @@
 <?php
 // Public/api/opendata/gov_labor_insurance.php
-// 勞保投保薪資分級：mode=status / mode=sync（抓→清空→重寫）
+// 勞保投保薪資分級表 — 自動抓取政府開放資料 API、寫入暫存表，再更新正式表
+// author: 湯億林專案版本
+// created: 2025-10-24
+
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../../config/db.php';
 
-$table = 'gov_labor_insurance';
-$url   = 'https://apiservice.mol.gov.tw/OdService/rest/datastore/A17000000J-020014-q8B';
+// === 基本設定 ===
+$table    = 'gov_labor_insurance';
+$tmpTable = 'gov_labor_insurance_tmp';
+$url      = 'https://apiservice.mol.gov.tw/OdService/rest/datastore/A17000000J-020014-q8B';
 
-function fetch_raw(string $url): ?string
-{
-    if (function_exists('curl_init')) {
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_HTTPHEADER => ['Accept: application/json'],
-            CURLOPT_USERAGENT => 'wm_payroll-fetch/1.0',
-        ]);
-        $res = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        return ($code >= 400 || $res === false) ? null : $res;
-    }
-    $res = @file_get_contents($url);
-    return $res === false ? null : $res;
-}
-function coalesce(...$xs)
-{
-    foreach ($xs as $v) {
-        if (isset($v) && $v !== '') return $v;
-    }
-    return null;
-}
-function parse_range_to_minmax(?string $s): array
-{
-    if (!$s) return [null, null];
-    $t = str_replace([',', '，', ' '], '', trim((string)$s));
-    $t = str_replace(['至', '到', '～', '〜', '–', '—', '－', '~'], '-', $t);
-    $t = preg_replace('/[^\d\-]/u', '', $t);
-    $p = array_values(array_filter(explode('-', $t), 'strlen'));
-    if (count($p) >= 2) {
-        $a = (int)$p[0];
-        $b = (int)$p[1];
-        if ($a > 0 && $b > 0) return [$a, $b];
-    }
-    if (count($p) === 1) {
-        $n = (int)$p[0];
-        return $n > 0 ? [$n, $n] : [null, null];
-    }
-    return [null, null];
-}
-function normalize_date($v): ?string
-{
-    if ($v === null) return null;
-    $s = trim((string)$v);
-    if ($s === '') return null;
-    $s = preg_replace('/[年月\.]/u', '/', $s);
-    $s = str_replace(['－', '—', '–', '．', '。', '-', '.'], '/', $s);
-    $s = str_replace(['日'], '', $s);
-    $s = preg_replace('/\s+/', '', $s);
-    if (preg_match('/^\d{7,8}$/', $s)) {
-        if (strlen($s) === 7) {
-            $y = (int)substr($s, 0, 3) + 1911;
-            $m = (int)substr($s, 3, 2);
-            $d = (int)substr($s, 5, 2);
-            return checkdate($m, $d, $y) ? sprintf('%04d-%02d-%02d', $y, $m, $d) : null;
-        }
-        $y = (int)substr($s, 0, 4);
-        $m = (int)substr($s, 4, 2);
-        $d = (int)substr($s, 6, 2);
-        if (checkdate($m, $d, $y)) return sprintf('%04d-%02d-%02d', $y, $m, $d);
-        $y3 = (int)substr($s, 0, 3) + 1911;
-        $m = (int)substr($s, 3, 2);
-        $d = (int)substr($s, 5, 2);
-        return checkdate($m, $d, $y3) ? sprintf('%04d-%02d-%02d', $y3, $m, $d) : null;
-    }
-    if (strpos($s, '/') !== false) {
-        $p = array_values(array_filter(explode('/', $s), 'strlen'));
-        if (count($p) >= 3) {
-            $a = (int)$p[0];
-            $b = (int)$p[1];
-            $c = (int)$p[2];
-            $y = ($a <= 300) ? $a + 1911 : $a;
-            return checkdate($b, $c, $y) ? sprintf('%04d-%02d-%02d', $y, $b, $c) : null;
-        }
-    }
-    $ts = strtotime($s);
-    return $ts ? date('Y-m-d', $ts) : null;
+// === 抓取遠端 JSON ===
+function fetch_raw(string $url): ?string {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_SSL_VERIFYPEER => false
+    ]);
+    $res = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($code !== 200 || !$res) return null;
+    return $res;
 }
 
+// === 主程式 ===
 try {
+    /** @var PDO $pdo */
+    $pdo = require __DIR__ . '/../../../config/db.php';
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $mode = $_GET['mode'] ?? 'status';
 
-    if ($mode === 'status') {
-        $st = $pdo->query("SELECT COUNT(*) cnt, MAX(effective_date) latest_date, MAX(created_at) updated_at FROM {$table}");
-        echo json_encode($st->fetch(PDO::FETCH_ASSOC));
-        exit;
-    }
+    // 1️⃣ 抓取 API JSON
+    $raw = fetch_raw($url);
+    if (!$raw) throw new Exception('遠端 API 無回應或 HTTP 錯誤');
+    $json = json_decode($raw, true);
+    if (!isset($json['result']['records'])) throw new Exception('JSON 結構異常');
 
-    if ($mode === 'sync') {
-        $raw = fetch_raw($url);
-        if (!$raw) throw new Exception('來源無回應或 HTTP 錯誤');
-        $j = json_decode($raw, true);
-        $rows = $j['result']['records'] ?? null;
-        if (!is_array($rows)) throw new Exception('來源 JSON 無 records');
+    $rows = $json['result']['records'];
+    if (!is_array($rows) || count($rows) === 0) throw new Exception('未取得資料');
 
-        $pdo->beginTransaction();
-        try {
-            try {
-                $pdo->exec("TRUNCATE TABLE {$table}");
-            } catch (Throwable $e) {
-                $pdo->exec("DELETE FROM {$table}");
-            }
+    // 2️⃣ 清空暫存表
+    $pdo->exec("TRUNCATE TABLE `$tmpTable`");
 
-            $sql = "INSERT INTO {$table} (level_no,wage_min,wage_max,base_amount,category,effective_date)
-            VALUES (:level_no,:wmin,:wmax,:base,:cat,:eff)";
-            $ins = $pdo->prepare($sql);
-            $n = 0;
+    // 3️⃣ 寫入暫存表
+    $ins = $pdo->prepare("
+        INSERT INTO `$tmpTable` (
+            grade, salary_from, salary_to, insured_salary,
+            effective_date, note, src_year, src_month
+        ) VALUES (
+            :grade, :salary_from, :salary_to, :insured_salary,
+            :effective_date, :note, :src_year, :src_month
+        )
+    ");
 
-            foreach ($rows as $r) {
-                $level = coalesce($r['投保薪資等級'] ?? null, $r['等級'] ?? null, $r['級距'] ?? null);
-                $range = coalesce($r['月薪資總額'] ?? null, $r['實際薪資'] ?? null, $r['薪資範圍'] ?? null, $r['月薪'] ?? null);
-                [$wmin, $wmax] = parse_range_to_minmax(is_string($range) ? $range : (string)$range);
-                $base = coalesce($r['月投保薪資'] ?? null, $r['月投保金額'] ?? null, $r['投保金額'] ?? null, $r['投保薪資'] ?? null);
-                if (is_string($base)) $base = str_replace([',', '，', ' '], '', $base);
-                $base = is_numeric($base) ? (float)$base : null;
-                $cat = coalesce($r['身分別'] ?? null, $r['投保類別'] ?? null, '一般勞工');
-                $eff = normalize_date(coalesce($r['生效日'] ?? null, $r['生效日期'] ?? null, $r['實施日期'] ?? null));
+    $n = 0;
+    foreach ($rows as $r) {
+        // 欄位容錯處理
+        $grade  = trim($r['級距'] ?? '');
+        $salary = trim($r['投保薪資'] ?? '');
+        $range  = trim($r['投保薪資分級區間'] ?? '');
+        $date   = trim($r['生效日期'] ?? '');
+        $note   = trim($r['備註'] ?? '');
 
-                if ($level === null || $base === null) continue;
-                $ins->execute([
-                    ':level_no' => (int)$level,
-                    ':wmin' => $wmin,
-                    ':wmax' => $wmax,
-                    ':base' => $base,
-                    ':cat' => $cat,
-                    ':eff' => $eff
-                ]);
-                $n++;
-            }
-
-            $pdo->commit();
-            echo json_encode(['ok' => true, 'inserted' => $n], JSON_UNESCAPED_UNICODE);
-            exit;
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            throw $e;
+        // 區間解析
+        $salary_from = null;
+        $salary_to   = null;
+        if (preg_match('/(\d+)\s*~\s*(\d+)/u', $range, $m)) {
+            $salary_from = (int)$m[1];
+            $salary_to   = (int)$m[2];
         }
+
+        // 投保薪資
+        $insured_salary = is_numeric($salary) ? (int)$salary : null;
+
+        // 民國年轉西元
+        $src_year = null; $src_month = null;
+        if (preg_match('/^(\d{3})[\/\-\.](\d{1,2})/', $date, $m)) {
+            $src_year  = 1911 + (int)$m[1];
+            $src_month = (int)$m[2];
+        }
+        $effective_date = ($src_year && $src_month)
+            ? sprintf('%04d-%02d-01', $src_year, $src_month)
+            : null;
+
+        $ins->execute([
+            ':grade' => $grade,
+            ':salary_from' => $salary_from,
+            ':salary_to' => $salary_to,
+            ':insured_salary' => $insured_salary,
+            ':effective_date' => $effective_date,
+            ':note' => $note,
+            ':src_year' => $src_year,
+            ':src_month' => $src_month,
+        ]);
+        $n++;
     }
 
-    throw new Exception('unknown mode');
+    // 4️⃣ 更新正式表
+    //   - 清空正式表
+    //   - 將暫存表資料搬過去
+    $pdo->beginTransaction();
+    $pdo->exec("TRUNCATE TABLE `$table`");
+    $pdo->exec("INSERT INTO `$table` SELECT * FROM `$tmpTable`");
+    $pdo->commit();
+
+    echo json_encode([
+        'ok' => true,
+        'count' => $n,
+        'message' => "成功更新 $table，共 $n 筆資料"
+    ], JSON_UNESCAPED_UNICODE);
+
 } catch (Throwable $e) {
+    if ($pdo && $pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    echo json_encode([
+        'ok' => false,
+        'error' => $e->getMessage(),
+        'line' => $e->getLine()
+    ], JSON_UNESCAPED_UNICODE);
 }

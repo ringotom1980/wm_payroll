@@ -8,7 +8,7 @@
 .env.*.local
 
 # 依專案需要：暫存與快取
-temp/
+
 cache/
 *.log
 *.bak

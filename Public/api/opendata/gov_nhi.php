@@ -34,29 +34,34 @@ function fetch_json($url){
 }
 
 function latest_nhi_identifier() {
-  // 取資料集清單，挑出「投保金額分級表」且 identifier 類型為 A21030000I-B1000A-??F
+  // 依健保署開放資料 API，抓取最新版本的「投保金額分級表」
   $dsUrl = 'https://info.nhi.gov.tw/api/iode0010/v1/rest/dataset?limit=200&offset=0';
   $ds = fetch_json($dsUrl);
   if (!isset($ds['result']['records']) || !is_array($ds['result']['records'])) {
     throw new Exception('取得資料集清單失敗');
   }
+
   $candidates = [];
   foreach ($ds['result']['records'] as $rec) {
     $id  = $rec['identifier'] ?? '';
     $ttl = ($rec['title'] ?? '') . ' ' . ($rec['notes'] ?? '') . ' ' . ($rec['description'] ?? '');
-    $okTitle = (mb_strpos($ttl, '投保金額分級表') !== false);
-    $okForm  = (preg_match('/^A21030000I\-B1000A\-\w+$/', $id) === 1);
-    if ($okTitle && $okForm) {
+    // ✅ 僅挑出 group_code=B1000A 且標題含「投保金額分級表」
+    if (strpos($id, 'A21030000I-B1000A-') === 0 && mb_strpos($ttl, '投保金額分級表') !== false) {
       $modified = $rec['modified'] ?? $rec['metadata_modified'] ?? '';
-      $candidates[] = ['identifier'=>$id, 'modified'=>$modified];
+      $candidates[] = ['identifier' => $id, 'modified' => $modified];
     }
   }
+
   if (empty($candidates)) {
-    return 'A21030000I-B1000A-00F'; // fallback
+    // 若沒有找到任何符合項目，回退到目前 114 年版
+    return 'A21030000I-B1000A-00F';
   }
-  usort($candidates, fn($a,$b)=>strcmp($b['modified'] ?? '', $a['modified'] ?? ''));
+
+  // 依修改時間由新到舊排序，取最新的 identifier
+  usort($candidates, fn($a, $b) => strcmp($b['modified'] ?? '', $a['modified'] ?? ''));
   return $candidates[0]['identifier'];
 }
+
 
 function parse_group_code($identifier){
   if (preg_match('/^[A-Z0-9]+\-([A-Z0-9]+)\-\w+$/', $identifier, $m)) return $m[1];
@@ -76,7 +81,7 @@ try {
   if ($mode === 'refresh' || $mode === 'refresh_tmp') {
     $identifier = latest_nhi_identifier();
     $groupCode  = parse_group_code($identifier);
-    $dataUrl    = "https://info.nhi.gov.tw/api/iode0010/v1/rest/datastore/{$identifier}";
+    $dataUrl    = "https://info.nhi.gov.tw/api/iode0000s01/Dataset?rId={$identifier}";
     $data = fetch_json($dataUrl);
     if (!isset($data['result']['records']) || !is_array($data['result']['records'])) {
       throw new Exception('取得健保資料失敗');

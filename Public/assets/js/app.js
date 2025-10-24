@@ -83,7 +83,6 @@
       setText('#kpiEmployees', data.employees ?? '—');
       setText('#kpiActivePeriods', data.active_periods ?? '—');
       setText('#kpiPendingApprovals', data.pending ?? '—');
-      setText('#govLastSync', data.gov_last_sync ?? '—');
     } catch (e) {
       if (handleAuthError(e)) return;
       console.warn('KPI load failed', e);

@@ -11,9 +11,9 @@
 
   // ---- 可調參數 ----
   const STATUS_TIMEOUT_MS = 8000;   // 單次讀取 status 逾時
-  const SYNC_TIMEOUT_MS   = 15000;  // 啟動同步逾時（只負責觸發，不等完成）
-  const POLL_INTERVAL_MS  = 3000;   // 輪詢間隔
-  const MAX_POLL_MS       = 120000; // 最長輪詢 2 分鐘後自動停止以免卡住
+  const SYNC_TIMEOUT_MS = 15000;  // 啟動同步逾時（只負責觸發，不等完成）
+  const POLL_INTERVAL_MS = 3000;   // 輪詢間隔
+  const MAX_POLL_MS = 120000; // 最長輪詢 2 分鐘後自動停止以免卡住
 
   // ---- 工具：帶逾時的 fetch（text→JSON 嘗試）----
   async function fetchJSONWithTimeout(url, { timeout = 10000, ...opt } = {}) {
@@ -45,7 +45,7 @@
     }
   }
 
-    // ---- 日期格式工具 ----
+  // ---- 日期格式工具 ----
   function fmtYmd(s) {
     if (!s) return '—';
     // 接受 'YYYY-MM-DD' 或 'YYYY/MM/DD' 或含時區的 ISO 字串
@@ -89,13 +89,13 @@
 
   // ---- 常數路徑 ----
   const STATUS = {
-    li:  '/api/opendata/gov_labor_insurance.php?mode=status',
-    lp:  '/api/opendata/gov_labor_pension.php?mode=status',
+    li: '/api/opendata/gov_labor_insurance.php?mode=status',
+    lp: '/api/opendata/gov_labor_pension.php?mode=status',
     nhi: '/api/opendata/gov_nhi.php?mode=status',
   };
   const SYNC = {
-    li:  '/api/opendata/gov_labor_insurance.php?mode=sync',
-    lp:  '/api/opendata/gov_labor_pension.php?mode=sync',
+    li: '/api/opendata/gov_labor_insurance.php?mode=sync',
+    lp: '/api/opendata/gov_labor_pension.php?mode=sync',
     nhi: '/api/opendata/gov_nhi.php?mode=sync',
   };
 
@@ -107,20 +107,20 @@
     const els = {
       lpEff: document.getElementById('lpEffective'),
       lpUpd: document.getElementById('lpUpdated'),
-      lpSt:  document.getElementById('lpStatus'),
+      lpSt: document.getElementById('lpStatus'),
       liEff: document.getElementById('liEffective'),
       liUpd: document.getElementById('liUpdated'),
-      liSt:  document.getElementById('liStatus'),
-      nhiEff:document.getElementById('nhiEffective'),
-      nhiUpd:document.getElementById('nhiUpdated'),
+      liSt: document.getElementById('liStatus'),
+      nhiEff: document.getElementById('nhiEffective'),
+      nhiUpd: document.getElementById('nhiUpdated'),
       nhiSt: document.getElementById('nhiStatus'),
     };
 
     // 追蹤狀態
     let pollTimer = null;
     let pollStartedAt = 0;
-    const running = { li:false, lp:false, nhi:false };
-    const lastEff = { li:null, lp:null, nhi:null }; // 紀錄上次看到的 latest_date；變化代表資料更新完成
+    const running = { li: false, lp: false, nhi: false };
+    const lastEff = { li: null, lp: null, nhi: null }; // 紀錄上次看到的 latest_date；變化代表資料更新完成
 
     // ---- UI helpers ----
     function setBtnState(isRunning) {
@@ -149,7 +149,7 @@
       const st = els[`${key}St`];
       if (st) st.textContent = '';
     }
-        function fillCard(key, data) {
+    function fillCard(key, data) {
       const effEl = els[`${key}Eff`];
       const updEl = els[`${key}Upd`];
 
@@ -207,15 +207,14 @@
     }
 
     async function refreshAllStatus() {
-      const [li, lp, nhi] = await Promise.all([
-        getStatusOne('li'),
-        getStatusOne('lp'),
-        getStatusOne('nhi'),
-      ]);
-      fillCard('li', li);
-      fillCard('lp', lp);
-      fillCard('nhi', nhi);
+      const j = await fetchJSONWithTimeout('/api/opendata/status.php', { timeout: STATUS_TIMEOUT_MS });
+      const S = j?.sources || {};
+      fillCard('li', S.li);
+      fillCard('lp', S.lp);
+      fillCard('nhi', S.nhi);
+      return !!j?.running;
     }
+
 
     // ---- 輪詢 ----
     function stopPolling() {
@@ -230,16 +229,20 @@
       if (pollTimer) return;
       pollStartedAt = Date.now();
       pollTimer = setInterval(async () => {
-        await refreshAllStatus();
+        const stillRunning = await refreshAllStatus();     // ★ 拿到 running 狀態
+        setBtnState(stillRunning);                        // ★ 同步按鈕忙碌狀態
 
         const allStopped = !running.li && !running.lp && !running.nhi;
         const overTime = Date.now() - pollStartedAt > MAX_POLL_MS;
 
-        if (allStopped || overTime) {
+        // ★ 如果後端回報已不在跑，就強制結束（即使資料沒變）
+        if (!stillRunning || allStopped || overTime) {
+          running.li = running.lp = running.nhi = false;  // 防守性
           stopPolling();
         }
       }, POLL_INTERVAL_MS);
     }
+
 
     // ---- 同步觸發 ----
     async function triggerSyncOne(key) {
@@ -259,7 +262,7 @@
     async function triggerAllSync() {
       setBtnState(true);
       // 標記 running & 顯示 spinner
-      ['li','lp','nhi'].forEach(k => {
+      ['li', 'lp', 'nhi'].forEach(k => {
         running[k] = true;
         markCardUpdating(k);
       });

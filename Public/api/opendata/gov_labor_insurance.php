@@ -221,26 +221,49 @@ function parse_money($v, $default = null): ?float {
 
 /** 解析「月薪資總額」成區間：以下/以上/至/—/～/單值 */
 function parse_wage_range(string $s): array {
+    // 支援多種寫法與尾綴：例「28,591至28,800元」「43901以上」「6000以下」「23100～24000」「23100-24000」
     $s = trim($s);
     if ($s === '') return [null, null];
+
+    // 標準化分隔符
     $s = str_replace(['～', '—', '–'], '-', $s);
 
-    if (preg_match('/^([\d,\.]+)\s*以下$/u', $s, $m)) {
-        $max = parse_money($m[1], null);
-        return [null, $max];
+    // 取出字串裡「所有數字」（允許小數，但通常沒有）
+    $nums = [];
+    if (preg_match_all('/\d+(?:\.\d+)?/', $s, $m)) {
+        $nums = array_map(function ($v) {
+            // 去掉千分位殘留（若來源已經含逗號，preg_match_all 就不會抓到逗號；這裡保險）
+            $v = str_replace(',', '', $v);
+            return (float)$v;
+        }, $m[0]);
     }
-    if (preg_match('/^([\d,\.]+)\s*以上$/u', $s, $m)) {
-        $min = parse_money($m[1], null);
-        return [$min, null];
+
+    // 關鍵字判斷
+    $hasBelow = mb_strpos($s, '以下') !== false; // 只有上限
+    $hasAbove = mb_strpos($s, '以上') !== false; // 只有下限
+
+    if ($hasBelow && isset($nums[0])) {
+        return [null, round($nums[0], 2)];
     }
-    if (preg_match('/^([\d,\.]+)\s*(?:至|-)\s*([\d,\.]+)$/u', $s, $m)) {
-        $min = parse_money($m[1], null);
-        $max = parse_money($m[2], null);
-        return [$min, $max];
+    if ($hasAbove && isset($nums[0])) {
+        return [round($nums[0], 2), null];
     }
-    $v = parse_money($s, null);
-    return [$v, $v];
+
+    // 雙邊區間（優先採前兩個數）
+    if (count($nums) >= 2) {
+        return [round($nums[0], 2), round($nums[1], 2)];
+    }
+
+    // 單一數值（當成單點）
+    if (count($nums) === 1) {
+        $v = round($nums[0], 2);
+        return [$v, $v];
+    }
+
+    // 都抓不到
+    return [null, null];
 }
+
 
 /** 民國/西元 → YYYY-MM-DD */
 function parse_date_roc_or_gregorian(string $s): ?string {

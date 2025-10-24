@@ -49,12 +49,12 @@
         return;
       }
 
-      // ✅ 登入成功後，非阻塞觸發政府資料同步
-      fetch('/api/refresh_gov_rates.php', {
-        method: 'POST',
-        body: new URLSearchParams({ force: 0 }),
+      // ✅ 登入成功後，非阻塞觸發政府資料同步（一次全抓、背景）
+      fetch('/api/opendata/refresh_all.php?mode=refresh&async=1', {
+        method: 'GET',
         credentials: 'same-origin',
-      }).catch(() => {});
+      }).catch(() => { });
+
 
       // 登入成功 → 導向儀表板
       window.location.assign('/dashboard');

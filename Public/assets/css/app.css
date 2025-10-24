@@ -420,25 +420,66 @@ img {
   font-weight: 600;
 }
 
-/* === 政府資料同步訊息樣式 === */
-#govRefreshMsg {
-  font-size: 13px;
-  transition: color 0.3s ease, opacity 0.3s ease;
-  opacity: 0.9;
+/* ---- 政府opendata 卡片 ---- */
+.gov-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+}
+.gov-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.gov-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px dashed #f1f5f9;
+}
+.gov-line:last-child {
+  border-bottom: none;
+}
+.gov-status {
+  margin-top: 6px;
+  min-height: 20px;
+  color: #0369a1;
 }
 
-#govRefreshMsg.muted {
-  color: var(--muted, #6b7280);
+/* ---- 手動更新按鈕（忙碌狀態） ---- */
+#btnGovRefresh.is-busy {
+  cursor: not-allowed;
+  opacity: 0.7;
+  position: relative;
+}
+#btnGovRefresh[aria-busy="true"]::after {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 8px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
 }
 
-#govRefreshMsg.success {
-  color: #059669; /* 綠色 */
+/* ---- 通用 spinner ---- */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #0ea5e9;
+  border-right-color: transparent;
+  margin-right: 6px;
+  animation: spin 0.8s linear infinite;
+  vertical-align: -2px;
 }
-
-#govRefreshMsg.error {
-  color: #dc2626; /* 紅色 */
-}
-
-#govRefreshMsg.info {
-  color: #2563eb; /* 藍色（資訊狀態） */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

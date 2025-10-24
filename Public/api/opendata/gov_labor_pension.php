@@ -207,16 +207,7 @@ function parse_csv(string $raw): array {
 
 /** 偵測欄位索引（容錯、關鍵字比對） */
 function detect_columns(array $headers): array {
-    // 同時保留原始與簡化（去空白）
-    $norm = [];
-    foreach ($headers as $i => $h) {
-        $raw = trim((string)$h);
-        $norm[$i] = [
-            'raw' => $raw,
-            'simple' => preg_replace('/\s+/', '', $raw),
-        ];
-    }
-
+    // 直接針對這份 CSV 的實際欄名做對應，同時保留模糊比對以便未來調整
     $map = [
         'level'          => null,
         'wage_range'     => null,
@@ -226,63 +217,27 @@ function detect_columns(array $headers): array {
         'effective_date' => null,
     ];
 
-    foreach ($norm as $i => $h) {
-        $raw = $h['raw'];
-        $simple = $h['simple'];
+    // 先精確比對
+    foreach ($headers as $i => $raw) {
+        $raw = trim((string)$raw);
+        if ($raw === '等級') $map['level'] = $i;
+        if ($raw === '實際工資/執行業務所得') $map['wage_range'] = $i;
+        if ($raw === '月提繳工資金額/月提繳執行業務所得金額') $map['base_amount'] = $i;
+        if ($raw === '生效日') $map['effective_date'] = $i;
+    }
 
-        // 1) 等級
-        if ($map['level'] === null) {
-            if (preg_match('/^等級$|級距|級別|^級$/u', $raw) || preg_match('/等級|級距|級別|級$/u', $simple)) {
-                $map['level'] = $i;
-                continue;
-            }
-        }
+    // 若之後標題變動，做備援模糊比對
+    foreach ($headers as $i => $h) {
+        $raw = trim((string)$h);
+        $simple = preg_replace('/\s+/', '', $raw);
 
-        // 2) 直接標示上下限（保留舊邏輯）
-        if ($map['wage_min'] === null && preg_match('/(薪資|工資)?(下限|min)/iu', $raw)) {
-            $map['wage_min'] = $i;
-        }
-        if ($map['wage_max'] === null && preg_match('/(薪資|工資)?(上限|max)/iu', $raw)) {
-            $map['wage_max'] = $i;
-        }
+        if ($map['level'] === null && preg_match('/等級|級距|級別|級$/u', $simple)) $map['level'] = $i;
+        if ($map['wage_range'] === null && preg_match('/實際工資|執行業務所得|範圍|區間/u', $raw)) $map['wage_range'] = $i;
+        if ($map['base_amount'] === null && preg_match('/月提繳(工資)?金額|月提繳執行業務所得金額|基數|本薪|本俸/u', $raw)) $map['base_amount'] = $i;
+        if ($map['effective_date'] === null && preg_match('/生效日|實施日|適用日|發布日|日期/u', $raw)) $map['effective_date'] = $i;
 
-        // 3) CSV 實際用語：把「實際工資/執行業務所得」視為【薪資範圍】
-        if ($map['wage_range'] === null) {
-            if (preg_match('/實際工資|執行業務所得/u', $raw)) {
-                $map['wage_range'] = $i;
-                continue;
-            }
-            // 備援：仍支援「範圍/區間/級距/分級」等用語
-            if (preg_match('/(薪資|工資|月提繳|提繳)?(範圍|區間|級距|分級)/u', $raw)) {
-                $map['wage_range'] = $i;
-                continue;
-            }
-        }
-
-        // 4) CSV 實際用語：把「月提繳工資金額/月提繳執行業務所得金額」視為【base_amount】
-        if ($map['base_amount'] === null) {
-            if (preg_match('/月提繳(工資)?金額|月提繳執行業務所得金額/u', $raw)) {
-                $map['base_amount'] = $i;
-                continue;
-            }
-            // 備援：泛用關鍵字
-            if (preg_match('/(提繳|投保)?(工資|基數)|本薪|本俸/u', $raw)) {
-                $map['base_amount'] = $i;
-                continue;
-            }
-        }
-
-        // 5) 生效/實施/適用日期
-        if ($map['effective_date'] === null) {
-            if (preg_match('/生效日|實施日|適用日|發布日/u', $raw)) {
-                $map['effective_date'] = $i;
-                continue;
-            }
-            if (preg_match('/(生效|實施|適用|發布)?日(期)?/u', $simple)) {
-                $map['effective_date'] = $i;
-                continue;
-            }
-        }
+        if ($map['wage_min'] === null && preg_match('/(薪資|工資)?(下限|min)/iu', $raw)) $map['wage_min'] = $i;
+        if ($map['wage_max'] === null && preg_match('/(薪資|工資)?(上限|max)/iu', $raw)) $map['wage_max'] = $i;
     }
 
     return $map;
@@ -311,15 +266,32 @@ function parse_money($v, $default = null): ?float {
 
 /** 解析區間字串，如「23,100-24,000」或「23100～24000」 */
 function parse_wage_range(string $s): array {
+    // 支援： "1501至3000"、"23100-24000"、"1500以下"、"30000以上"、"23100～24000"
     $s = trim($s);
     if ($s === '') return [null, null];
-    // 統一分隔符
-    $s = str_replace(['～', '—', '–', '至'], '-', $s);
-    if (strpos($s, '-') !== false) {
-        [$a, $b] = explode('-', $s, 2);
-        return [parse_money($a, null), parse_money($b, null)];
+
+    // 標準化分隔
+    $s = str_replace(['～', '—', '–'], '-', $s);
+
+    // 「以下」：只有上限
+    if (preg_match('/^([\d,\.]+)\s*以下$/u', $s, $m)) {
+        $max = parse_money($m[1], null);
+        return [null, $max];
     }
-    // 若只有一個數，當作單點
+    // 「以上」：只有下限
+    if (preg_match('/^([\d,\.]+)\s*以上$/u', $s, $m)) {
+        $min = parse_money($m[1], null);
+        return [$min, null];
+    }
+
+    // 「至」或「-」雙邊區間
+    if (preg_match('/^([\d,\.]+)\s*(?:至|-)\s*([\d,\.]+)$/u', $s, $m)) {
+        $min = parse_money($m[1], null);
+        $max = parse_money($m[2], null);
+        return [$min, $max];
+    }
+
+    // 只有單值
     $v = parse_money($s, null);
     return [$v, $v];
 }
@@ -329,26 +301,32 @@ function parse_date_roc_or_gregorian(string $s): ?string {
     $s = trim($s);
     if ($s === '') return null;
 
-    // 民國： e.g., 112/01/01 或 112.1.1
-    if (preg_match('/^(\d{2,3})[\/\.\-](\d{1,2})[\/\.\-](\d{1,2})$/', $s, $m)) {
-        $y = (int)$m[1];
-        $mth = (int)$m[2];
-        $d = (int)$m[3];
-        // 判斷是否民國（小於 1911 視為民國年）
-        if ($y < 1911) $y += 1911;
-        return sprintf('%04d-%02d-%02d', $y, $mth, $d);
+    // 民國 7~8 碼（例如 1140101 → 2025-01-01；1031231 → 2014-12-31）
+    if (preg_match('/^(\d{3})(\d{2})(\d{2})$/', $s, $m)) {
+        $y = (int)$m[1] + 1911;
+        return sprintf('%04d-%02d-%02d', $y, (int)$m[2], (int)$m[3]);
     }
 
-    // 西元：YYYY-MM-DD / YYYY/MM/DD
+    // 民國 yyyy/mm/dd 或 yyy/mm/dd（含點或破折號）
+    if (preg_match('/^(\d{2,3})[\/\.\-](\d{1,2})[\/\.\-](\d{1,2})$/', $s, $m)) {
+        $y = (int)$m[1]; if ($y < 1911) $y += 1911;
+        return sprintf('%04d-%02d-%02d', $y, (int)$m[2], (int)$m[3]);
+    }
+
+    // 西元 YYYY-MM-DD / YYYY/MM/DD
     if (preg_match('/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/', $s, $m)) {
         return sprintf('%04d-%02d-%02d', (int)$m[1], (int)$m[2], (int)$m[3]);
     }
 
-    // 只給年月
+    // 西元 YYYYMMDD
+    if (preg_match('/^(\d{4})(\d{2})(\d{2})$/', $s, $m)) {
+        return sprintf('%04d-%02d-%02d', (int)$m[1], (int)$m[2], (int)$m[3]);
+    }
+
+    // 西元 YYYY-MM 或 YYYY/MM
     if (preg_match('/^(\d{4})[\/\-](\d{1,2})$/', $s, $m)) {
         return sprintf('%04d-%02d-01', (int)$m[1], (int)$m[2]);
     }
 
-    // 無法判讀
     return null;
 }

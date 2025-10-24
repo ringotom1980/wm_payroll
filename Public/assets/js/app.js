@@ -31,8 +31,8 @@
     }
   }
 
-  function setText(id, v) {
-    const el = $(id);
+  function setText(sel, v) {
+    const el = $(sel);
     if (el) el.textContent = v;
   }
 
@@ -121,7 +121,7 @@
     btn.addEventListener('click', () => loadRecentChanges());
   }
 
-  // ---------- 新增：政府 OpenData 同步（背景執行，不擋頁面） ----------
+  // ---------- 政府 OpenData 同步（背景執行，不擋頁面） ----------
   const GOV_SYNC_ENDPOINTS = {
     li:  '/api/opendata/gov_labor_insurance.php?mode=sync',
     lp:  '/api/opendata/gov_labor_pension.php?mode=sync',
@@ -130,19 +130,44 @@
   const notify = (detail) =>
     window.dispatchEvent(new CustomEvent('govSyncProgress', { detail }));
 
+  // 逾時 + 單次鎖
+  const SYNC_TIMEOUT_MS = 15000; // 15s 超時保護
+  const syncLocks = new Set();   // 防重複觸發
+
   async function fireAndForget(url, key) {
+    if (syncLocks.has(key)) return; // 已在跑就不再發
+    syncLocks.add(key);
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort('timeout'), SYNC_TIMEOUT_MS);
+
     try {
       notify({ service: key, status: 'running' });
-      // 不 await JSON、只 fire；避免阻塞頁面
-      await fetch(url, { method: 'GET', credentials: 'same-origin', cache: 'no-cache' });
-      notify({ service: key, status: 'done' });
+      const res = await fetch(url, {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-cache',
+        signal: ctrl.signal,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      if (!res.ok) {
+        notify({ service: key, status: 'error', message: `HTTP ${res.status}` });
+      } else {
+        notify({ service: key, status: 'done' });
+      }
     } catch (e) {
       notify({ service: key, status: 'error', message: String(e) });
+    } finally {
+      clearTimeout(timer);
+      syncLocks.delete(key);
     }
   }
 
   function startGovOpendataSync() {
-    // 登入後一律啟動三支（符合你「每次登入就觸發」）
+    // 本頁生命週期只跑一次
+    if (window.__wm_govsync_started__) return;
+    window.__wm_govsync_started__ = true;
+
     fireAndForget(GOV_SYNC_ENDPOINTS.li,  'li');
     fireAndForget(GOV_SYNC_ENDPOINTS.lp,  'lp');
     fireAndForget(GOV_SYNC_ENDPOINTS.nhi, 'nhi');
@@ -155,8 +180,9 @@
     loadDashboard();
     bindReloadRecent();
 
-    // ★ 新增：登入後頁面載入，背景自動觸發政府資料同步
-    // 若你只想在 dashboard 觸發，把這行移到 loadDashboard() 裡面也可以。
-    startGovOpendataSync();
+    // 僅在 dashboard 有 KPI 時才自動同步；避免每頁都打外部來源
+    if (document.querySelector('#kpiEmployees')) {
+      startGovOpendataSync();
+    }
   });
 })();

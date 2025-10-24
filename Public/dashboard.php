@@ -167,7 +167,7 @@ require __DIR__ . '/partials/header.php';
   </main>
 
   <?php require __DIR__ . '/partials/footer.php'; ?>
-  <script src="/assets/js/dashboard.js?v=3"></script>
+  <script src="/assets/js/dashboard.js?v=4"></script>
 </body>
 
 </html>

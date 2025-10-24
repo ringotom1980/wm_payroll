@@ -11,11 +11,25 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 $lockFile = __DIR__ . '/../../../temp/gov_refresh.lock';
+$lockDir  = dirname($lockFile);
+if (!is_dir($lockDir)) {
+  @mkdir($lockDir, 0775, true);
+}
+
+/** 協定偵測（支援反向代理） */
+function detect_scheme(): string {
+  $https = $_SERVER['HTTPS'] ?? '';
+  $xfp   = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
+  if ($https && strtolower($https) !== 'off') return 'https';
+  if ($xfp) return strtolower(explode(',', $xfp)[0]);
+  return (!empty($_SERVER['REQUEST_SCHEME'])) ? $_SERVER['REQUEST_SCHEME'] : 'http';
+}
 
 // ---- base URL ----
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$scheme = detect_scheme();
 $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
-$dirUri = rtrim(dirname($_SERVER['REQUEST_URI'] ?? '/api/opendata/'), '/');
+$reqUri = $_SERVER['REQUEST_URI'] ?? '/api/opendata/refresh_all.php';
+$dirUri = rtrim(str_replace('\\', '/', dirname($reqUri)), '/');
 $base   = "{$scheme}://{$host}{$dirUri}";
 
 $apis = [
@@ -28,36 +42,53 @@ $mode  = $_GET['mode']  ?? 'refresh';
 $async = isset($_GET['async']) && $_GET['async'] == '1';
 
 function write_lock(string $file, array $data): void {
-  @file_put_contents($file, json_encode($data + ['ts'=>time()], JSON_UNESCAPED_UNICODE));
+  $payload = json_encode($data + ['ts'=>time()], JSON_UNESCAPED_UNICODE);
+  $fp = @fopen($file, 'c+');
+  if (!$fp) { @file_put_contents($file, $payload); return; }
+  if (@flock($fp, LOCK_EX)) {
+    ftruncate($fp, 0);
+    fwrite($fp, $payload);
+    fflush($fp);
+    @flock($fp, LOCK_UN);
+  }
+  fclose($fp);
+}
+function read_lock(string $file): array {
+  if (!is_file($file)) return [];
+  $txt = @file_get_contents($file);
+  $meta = @json_decode($txt ?: '', true);
+  return is_array($meta) ? $meta : [];
 }
 function is_running(string $file): bool {
-  if (!is_file($file)) return false;
-  $meta = @json_decode(@file_get_contents($file), true) ?: [];
+  $meta = read_lock($file);
   if (empty($meta['running'])) return false;
   $ts = (int)($meta['ts'] ?? 0);
-  return (time() - $ts) <= 600; // 10 分鐘過期保護
+  // 10 分鐘過期保護
+  return (time() - $ts) <= 600;
 }
 function finish_request_early(array $payload): void {
+  $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
   if (function_exists('fastcgi_finish_request')) {
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    echo $json;
     fastcgi_finish_request();
   } else {
     header('Connection: close');
     ignore_user_abort(true);
     ob_start();
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    echo $json;
     $size = ob_get_length();
     header("Content-Length: $size");
     ob_end_flush(); flush();
   }
 }
+/** 並行 GET */
 function multi_get(array $urls): array {
-  // 平行 GET
   $mh = curl_multi_init();
   $chs = [];
+
   foreach ($urls as $key => $url) {
-    $sep = (strpos($url, '?') === false) ? '?' : '&';
-    $full = $url . $sep . 'mode=sync';
+    $sep  = (strpos($url, '?') === false) ? '?' : '&';
+    $full = $url . $sep . 'mode=sync&from=refresh_all';
     $ch = curl_init($full);
     curl_setopt_array($ch, [
       CURLOPT_RETURNTRANSFER => true,
@@ -65,20 +96,27 @@ function multi_get(array $urls): array {
       CURLOPT_CONNECTTIMEOUT => 10,
       CURLOPT_TIMEOUT        => 60, // 每支最多 60s
       CURLOPT_SSL_VERIFYPEER => false,
-      CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+      CURLOPT_SSL_VERIFYHOST => 0,
+      CURLOPT_HTTPHEADER     => ['Accept: application/json', 'X-Requested-With: XMLHttpRequest'],
+      CURLOPT_USERAGENT      => 'wm-payroll-refresh/1.0',
     ]);
     curl_multi_add_handle($mh, $ch);
     $chs[$key] = $ch;
   }
+
+  $active = null;
   do {
     $status = curl_multi_exec($mh, $active);
-    curl_multi_select($mh, 0.5);
+    if ($active) {
+      curl_multi_select($mh, 0.5);
+    }
   } while ($active && $status == CURLM_OK);
 
   $out = [];
   foreach ($chs as $key => $ch) {
     $body = curl_multi_getcontent($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
     curl_multi_remove_handle($mh, $ch);
     curl_close($ch);
     $out[$key] = [
@@ -86,6 +124,7 @@ function multi_get(array $urls): array {
       'ok'     => ($code >= 200 && $code < 300),
       'json'   => json_decode($body ?? '', true),
       'raw'    => $body,
+      'error'  => $err ?: null,
     ];
   }
   curl_multi_close($mh);
@@ -101,7 +140,7 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $q = function(string $table) use ($pdo) {
-      $stmt = $pdo->query("SELECT COUNT(*) cnt, MAX(effective_date) latest_date, MAX(created_at) updated_at FROM {$table}");
+      $stmt = $pdo->query("SELECT COUNT(*) cnt, MAX(effective_date) latest_date, MAX(created_at) updated_at FROM `{$table}`");
       $r = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
       return [
         'cnt'          => (int)($r['cnt'] ?? 0),

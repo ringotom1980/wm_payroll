@@ -1,160 +1,124 @@
 <?php
 // Public/api/opendata/gov_labor_pension.php
-// 勞退分級：mode=status / mode=sync（抓→清空→重寫）
+// 勞退提繳分級（CSV 版）— 由 data.gov.tw metadata 取 CSV → 匯入
+// datasetId: 6274
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/../../../config/db.php';
 
-$table = 'gov_labor_pension';
-$url   = 'https://apiservice.mol.gov.tw/OdService/rest/datastore/A17000000J-020028-Z8S';
-
-function fetch_raw(string $url): ?string
-{
-    if (function_exists('curl_init')) {
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_HTTPHEADER => ['Accept: application/json'],
-            CURLOPT_USERAGENT => 'wm_payroll-fetch/1.0',
-        ]);
-        $res = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        return ($code >= 400 || $res === false) ? null : $res;
-    }
-    $res = @file_get_contents($url);
-    return $res === false ? null : $res;
-}
-function coalesce(...$xs)
-{
-    foreach ($xs as $v) {
-        if (isset($v) && $v !== '') return $v;
-    }
-    return null;
-}
-function parse_range_to_minmax(?string $s): array
-{
-    if (!$s) return [null, null];
-    $t = str_replace([',', '，', ' '], '', trim((string)$s));
-    $t = str_replace(['至', '到', '～', '〜', '–', '—', '－', '~'], '-', $t);
-    $t = preg_replace('/[^\d\-]/u', '', $t);
-    $p = array_values(array_filter(explode('-', $t), 'strlen'));
-    if (count($p) >= 2) {
-        $a = (int)$p[0];
-        $b = (int)$p[1];
-        if ($a > 0 && $b > 0) return [$a, $b];
-    }
-    if (count($p) === 1) {
-        $n = (int)$p[0];
-        return $n > 0 ? [$n, $n] : [null, null];
-    }
-    return [null, null];
-}
-function normalize_date($v): ?string
-{
-    if ($v === null) return null;
-    $s = trim((string)$v);
-    if ($s === '') return null;
-    $s = preg_replace('/[年月\.]/u', '/', $s);
-    $s = str_replace(['－', '—', '–', '．', '。', '-', '.'], '/', $s);
-    $s = str_replace(['日'], '', $s);
-    $s = preg_replace('/\s+/', '', $s);
-    if (preg_match('/^\d{7,8}$/', $s)) {
-        if (strlen($s) === 7) {
-            $y = (int)substr($s, 0, 3) + 1911;
-            $m = (int)substr($s, 3, 2);
-            $d = (int)substr($s, 5, 2);
-            return checkdate($m, $d, $y) ? sprintf('%04d-%02d-%02d', $y, $m, $d) : null;
-        }
-        $y = (int)substr($s, 0, 4);
-        $m = (int)substr($s, 4, 2);
-        $d = (int)substr($s, 6, 2);
-        if (checkdate($m, $d, $y)) return sprintf('%04d-%02d-%02d', $y, $m, $d);
-        $y3 = (int)substr($s, 0, 3) + 1911;
-        $m = (int)substr($s, 3, 2);
-        $d = (int)substr($s, 5, 2);
-        return checkdate($m, $d, $y3) ? sprintf('%04d-%02d-%02d', $y3, $m, $d) : null;
-    }
-    if (strpos($s, '/') !== false) {
-        $p = array_values(array_filter(explode('/', $s), 'strlen'));
-        if (count($p) >= 3) {
-            $a = (int)$p[0];
-            $b = (int)$p[1];
-            $c = (int)$p[2];
-            $y = ($a <= 300) ? $a + 1911 : $a;
-            return checkdate($b, $c, $y) ? sprintf('%04d-%02d-%02d', $y, $b, $c) : null;
-        }
-    }
-    $ts = strtotime($s);
-    return $ts ? date('Y-m-d', $ts) : null;
-}
+$datasetId = 6274;
+$table     = 'gov_labor_pension';
+$tmpTable  = 'gov_labor_pension_tmp';
 
 try {
+    /** @var PDO $pdo */
+    $pdo = require __DIR__ . '/../../../config/db.php';
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $mode = $_GET['mode'] ?? 'status';
 
-    if ($mode === 'status') {
-        $st = $pdo->query("SELECT COUNT(*) cnt, MAX(effective_date) latest_date, MAX(created_at) updated_at FROM {$table}");
-        echo json_encode($st->fetch(PDO::FETCH_ASSOC));
-        exit;
-    }
+    // 1) 取 metadata，撈出 CSV（這筆通常只有一個 CSV）
+    $metaUrl = "https://data.gov.tw/api/v1/dataset/{$datasetId}";
+    $meta = json_decode(file_get_contents($metaUrl), true);
+    if (!$meta || empty($meta['resources'])) throw new Exception('讀取 metadata 失敗或無資源');
 
-    if ($mode === 'sync') {
-        $raw = fetch_raw($url);
-        if (!$raw) throw new Exception('來源無回應或 HTTP 錯誤');
-        $j = json_decode($raw, true);
-        $rows = $j['result']['records'] ?? null;
-        if (!is_array($rows)) throw new Exception('來源 JSON 無 records');
-
-        $pdo->beginTransaction();
-        try {
-            try {
-                $pdo->exec("TRUNCATE TABLE {$table}");
-            } catch (Throwable $e) {
-                $pdo->exec("DELETE FROM {$table}");
-            }
-
-            $sql = "INSERT INTO {$table} (level_no,wage_min,wage_max,base_amount,effective_date)
-            VALUES (:level_no,:wmin,:wmax,:base,:eff)";
-            $ins = $pdo->prepare($sql);
-            $n = 0;
-
-            foreach ($rows as $r) {
-                // 名稱較雜，容錯多一點
-                $level = coalesce($r['等級'] ?? null, $r['級距'] ?? null, $r['投保薪資等級'] ?? null, $r['分級'] ?? null);
-                $range = coalesce($r['薪資範圍'] ?? null, $r['月薪資總額'] ?? null, $r['實際薪資'] ?? null, $r['月薪'] ?? null);
-                [$wmin, $wmax] = parse_range_to_minmax(is_string($range) ? $range : (string)$range);
-                $base = coalesce($r['月提繳工資'] ?? null, $r['勞工退休金月提繳工資分級'] ?? null, $r['投保金額'] ?? null, $r['月投保薪資'] ?? null);
-                if (is_string($base)) $base = str_replace([',', '，', ' '], '', $base);
-                $base = is_numeric($base) ? (float)$base : null;
-                $eff = normalize_date(coalesce($r['生效日'] ?? null, $r['生效日期'] ?? null, $r['實施日期'] ?? null, '2025-01-01'));
-
-                if ($level === null || $base === null) continue;
-                $ins->execute([
-                    ':level_no' => (int)$level,
-                    ':wmin' => $wmin,
-                    ':wmax' => $wmax,
-                    ':base' => $base,
-                    ':eff' => $eff
-                ]);
-                $n++;
-            }
-
-            $pdo->commit();
-            echo json_encode(['ok' => true, 'inserted' => $n], JSON_UNESCAPED_UNICODE);
-            exit;
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            throw $e;
+    $csvRes = null;
+    foreach ($meta['resources'] as $r) {
+        if (isset($r['format']) && strcasecmp($r['format'], 'CSV') === 0 && !empty($r['url'])) {
+            $csvRes = $r; break;
         }
     }
+    if (!$csvRes) throw new Exception('找不到 CSV 資源');
+    $csvUrl = $csvRes['url'];
+    $updated = $csvRes['updated'] ?? null;
 
-    throw new Exception('unknown mode');
+    // 2) 下載 CSV
+    $raw = file_get_contents($csvUrl);
+    if (!$raw) throw new Exception("下載失敗：$csvUrl");
+    $raw = mb_convert_encoding($raw, 'UTF-8', 'auto');
+
+    // 3) 解析
+    $fh = fopen('php://memory', 'r+');
+    fwrite($fh, $raw);
+    rewind($fh);
+    $headers = fgetcsv($fh);
+    if (!$headers) throw new Exception('CSV 無標題列');
+
+    $idx = ['level' => -1, 'range' => -1, 'wage' => -1, 'date' => -1, 'note' => -1];
+    foreach ($headers as $i => $h) {
+        $h = trim($h);
+        if ($idx['level'] < 0 && (mb_strpos($h, '等級') !== false || mb_strpos($h, '級') !== false)) $idx['level'] = $i;
+        if ($idx['range'] < 0 && (mb_strpos($h, '實際工資') !== false || mb_strpos($h, '區間') !== false || mb_strpos($h, '級距') !== false)) $idx['range'] = $i;
+        if ($idx['wage']  < 0 && (mb_strpos($h, '月提繳工資') !== false || mb_strpos($h, '提繳工資') !== false)) $idx['wage']  = $i;
+        if ($idx['date']  < 0 && (mb_strpos($h, '生效') !== false || mb_strpos($h, '日期') !== false)) $idx['date']  = $i;
+        if ($idx['note']  < 0 && (mb_strpos($h, '備註') !== false)) $idx['note']  = $i;
+    }
+    if ($idx['range'] < 0 || $idx['wage'] < 0) throw new Exception('CSV 欄位無法對應（需要：實際工資/區間、月提繳工資）');
+
+    $pdo->exec("TRUNCATE TABLE `$tmpTable`");
+    $ins = $pdo->prepare("
+        INSERT INTO `$tmpTable`
+        (level_no, wage_min, wage_max, base_amount, effective_date)
+        VALUES
+        (:lv, :min, :max, :base, :eff)
+    ");
+
+    $n = 0;
+    while (($row = fgetcsv($fh)) !== false) {
+        if (count($row) < max($idx) + 1) continue;
+
+        $lv   = $idx['level'] >= 0 ? trim((string)$row[$idx['level']]) : '';
+        $range= trim((string)$row[$idx['range']]);
+        $wage = trim((string)$row[$idx['wage']]);
+        $date = $idx['date'] >= 0 ? trim((string)($row[$idx['date']] ?? '')) : '';
+        // $note 不入庫（這張表沒有 category 欄位）
+
+        // 區間
+        $from = null; $to = null;
+        if (preg_match('/(\d+)\s*[~至-]\s*(\d+)/u', $range, $m)) {
+            $from = (float)$m[1]; $to = (float)$m[2];
+        } elseif (preg_match('/(\d+)\s*元\s*以上/u', $range, $m)) {
+            $from = (float)$m[1]; $to = null;
+        } else {
+            $v = preg_replace('/[^\d]/', '', $range);
+            $from = $to = $v !== '' ? (float)$v : null;
+        }
+
+        $base = (float)preg_replace('/[^\d]/', '', $wage);
+        if ($base <= 0) continue;
+
+        $eff = null;
+        if ($updated) {
+            $u = substr($updated, 0, 10);
+            if (preg_match('/^(\d{4})-(\d{2})-\d{2}$/', $u, $mm)) {
+                $eff = sprintf('%s-%s-01', $mm[1], $mm[2]);
+            }
+        } elseif (preg_match('/^(\d{3,4})[\/\-\.](\d{1,2})/u', $date, $mm)) {
+            $yy = (int)$mm[1]; $mn = (int)$mm[2];
+            if ($yy < 1911) $yy += 1911;
+            $eff = sprintf('%04d-%02d-01', $yy, $mn);
+        }
+
+        $ins->execute([
+            ':lv'   => (int)preg_replace('/\D/', '', $lv),
+            ':min'  => $from,
+            ':max'  => $to,
+            ':base' => $base,
+            ':eff'  => $eff
+        ]);
+        $n++;
+    }
+    fclose($fh);
+
+    $pdo->beginTransaction();
+    $pdo->exec("TRUNCATE TABLE `$table`");
+    $pdo->exec("
+        INSERT INTO `$table` (level_no, wage_min, wage_max, base_amount, effective_date)
+        SELECT level_no, wage_min, wage_max, base_amount, effective_date
+        FROM `$tmpTable`
+    ");
+    $pdo->commit();
+
+    echo json_encode(['ok' => true, 'count' => $n, 'source' => $csvUrl], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
+    if (!empty($pdo) && $pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }

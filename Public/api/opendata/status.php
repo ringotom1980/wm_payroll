@@ -6,9 +6,14 @@ header('Content-Type: application/json; charset=utf-8');
 
 $lockFile = __DIR__ . '/../../../temp/gov_refresh.lock';
 
+function read_lock(string $file): array {
+  if (!is_file($file)) return [];
+  $txt = @file_get_contents($file);
+  $meta = @json_decode($txt ?: '', true);
+  return is_array($meta) ? $meta : [];
+}
 function is_running(string $file): bool {
-  if (!is_file($file)) return false;
-  $meta = @json_decode(@file_get_contents($file), true) ?: [];
+  $meta = read_lock($file);
   if (empty($meta['running'])) return false;
   $ts = (int)($meta['ts'] ?? 0);
   return (time() - $ts) <= 600; // 10 分鐘過期保護
@@ -20,7 +25,7 @@ try {
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
   $q = function(string $table) use ($pdo) {
-    $stmt = $pdo->query("SELECT COUNT(*) cnt, MAX(effective_date) latest_date, MAX(created_at) updated_at FROM {$table}");
+    $stmt = $pdo->query("SELECT COUNT(*) cnt, MAX(effective_date) latest_date, MAX(created_at) updated_at FROM `{$table}`");
     $r = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
     return [
       'cnt'         => (int)($r['cnt'] ?? 0),

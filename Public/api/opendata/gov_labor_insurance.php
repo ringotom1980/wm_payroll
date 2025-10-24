@@ -1,126 +1,129 @@
 <?php
 // Public/api/opendata/gov_labor_insurance.php
-// 勞保投保薪資分級表 — 自動抓取政府開放資料 API、寫入暫存表，再更新正式表
-// author: 湯億林專案版本
-// created: 2025-10-24
-
+// 勞保投保薪資分級表（CSV 版）— 由 data.gov.tw metadata 取 CSV → 匯入
+// datasetId: 6258
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
-require_once __DIR__ . '/../../../config/db.php';
 
-// === 基本設定 ===
-$table    = 'gov_labor_insurance';
-$tmpTable = 'gov_labor_insurance_tmp';
-$url      = 'https://apiservice.mol.gov.tw/OdService/rest/datastore/A17000000J-020014-q8B';
+$datasetId = 6258;
+$table     = 'gov_labor_insurance';
+$tmpTable  = 'gov_labor_insurance_tmp';
 
-// === 抓取遠端 JSON ===
-function fetch_raw(string $url): ?string {
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_TIMEOUT => 20,
-        CURLOPT_SSL_VERIFYPEER => false
-    ]);
-    $res = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    if ($code !== 200 || !$res) return null;
-    return $res;
-}
-
-// === 主程式 ===
 try {
     /** @var PDO $pdo */
     $pdo = require __DIR__ . '/../../../config/db.php';
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // 1️⃣ 抓取 API JSON
-    $raw = fetch_raw($url);
-    if (!$raw) throw new Exception('遠端 API 無回應或 HTTP 錯誤');
-    $json = json_decode($raw, true);
-    if (!isset($json['result']['records'])) throw new Exception('JSON 結構異常');
+    // 1) 取 metadata，撈出 CSV 連結（取第一筆 CSV 即可）
+    $metaUrl = "https://data.gov.tw/api/v1/dataset/{$datasetId}";
+    $meta = json_decode(file_get_contents($metaUrl), true);
+    if (!$meta || empty($meta['resources'])) throw new Exception('讀取 metadata 失敗或無資源');
 
-    $rows = $json['result']['records'];
-    if (!is_array($rows) || count($rows) === 0) throw new Exception('未取得資料');
+    $csvRes = null;
+    foreach ($meta['resources'] as $r) {
+        if (isset($r['format']) && strcasecmp($r['format'], 'CSV') === 0 && !empty($r['url'])) {
+            $csvRes = $r;
+            break;
+        }
+    }
+    if (!$csvRes) throw new Exception('找不到 CSV 資源');
+    $csvUrl = $csvRes['url'];
 
-    // 2️⃣ 清空暫存表
+    // 2) 下載 CSV
+    $raw = file_get_contents($csvUrl);
+    if (!$raw) throw new Exception("下載失敗：$csvUrl");
+    $raw = mb_convert_encoding($raw, 'UTF-8', 'auto');
+
+    // 3) 解析 CSV（以首列為標題動態對應）
+    $fh = fopen('php://memory', 'r+');
+    fwrite($fh, $raw);
+    rewind($fh);
+
+    $headers = fgetcsv($fh);
+    if (!$headers) throw new Exception('CSV 無標題列');
+
+    // 建 header 索引（關鍵欄：等級、區間、投保薪資、日期）
+    $idx = ['level' => -1, 'range' => -1, 'wage' => -1, 'date' => -1, 'note' => -1];
+    foreach ($headers as $i => $h) {
+        $h = trim($h);
+        if ($idx['level'] < 0 && (mb_strpos($h, '等級') !== false || mb_strpos($h, '級別') !== false)) $idx['level'] = $i;
+        if ($idx['range'] < 0 && (mb_strpos($h, '區間') !== false || mb_strpos($h, '級距') !== false)) $idx['range'] = $i;
+        if ($idx['wage']  < 0 && (mb_strpos($h, '投保薪資') !== false || mb_strpos($h, '月投保金額') !== false)) $idx['wage']  = $i;
+        if ($idx['date']  < 0 && (mb_strpos($h, '生效') !== false || mb_strpos($h, '日期') !== false)) $idx['date']  = $i;
+        if ($idx['note']  < 0 && (mb_strpos($h, '備註') !== false)) $idx['note']  = $i;
+    }
+    if ($idx['range'] < 0 || $idx['wage'] < 0) {
+        throw new Exception('CSV 欄位無法對應（需要：區間/級距、投保薪資）');
+    }
+
     $pdo->exec("TRUNCATE TABLE `$tmpTable`");
-
-    // 3️⃣ 寫入暫存表
     $ins = $pdo->prepare("
-        INSERT INTO `$tmpTable` (
-            grade, salary_from, salary_to, insured_salary,
-            effective_date, note, src_year, src_month
-        ) VALUES (
-            :grade, :salary_from, :salary_to, :insured_salary,
-            :effective_date, :note, :src_year, :src_month
-        )
+        INSERT INTO `$tmpTable`
+        (level_no, wage_min, wage_max, base_amount, category, effective_date)
+        VALUES
+        (:lv, :min, :max, :base, :cat, :eff)
     ");
 
     $n = 0;
-    foreach ($rows as $r) {
-        // 欄位容錯處理
-        $grade  = trim($r['級距'] ?? '');
-        $salary = trim($r['投保薪資'] ?? '');
-        $range  = trim($r['投保薪資分級區間'] ?? '');
-        $date   = trim($r['生效日期'] ?? '');
-        $note   = trim($r['備註'] ?? '');
+    while (($row = fgetcsv($fh)) !== false) {
+        if (count($row) < max($idx) + 1) continue;
+
+        $lv   = $idx['level'] >= 0 ? trim((string)$row[$idx['level']]) : '';
+        $range= trim((string)$row[$idx['range']]);
+        $wage = trim((string)$row[$idx['wage']]);
+        $date = $idx['date'] >= 0 ? trim((string)($row[$idx['date']] ?? '')) : '';
+        $note = $idx['note'] >= 0 ? trim((string)($row[$idx['note']] ?? '')) : null;
 
         // 區間解析
-        $salary_from = null;
-        $salary_to   = null;
-        if (preg_match('/(\d+)\s*~\s*(\d+)/u', $range, $m)) {
-            $salary_from = (int)$m[1];
-            $salary_to   = (int)$m[2];
+        $from = null; $to = null;
+        if (preg_match('/(\d+)\s*[~至-]\s*(\d+)/u', $range, $m)) {
+            $from = (float)$m[1];
+            $to   = (float)$m[2];
+        } elseif (preg_match('/(\d+)\s*元\s*以上/u', $range, $m)) {
+            $from = (float)$m[1];
+            $to   = null;
+        } else {
+            $v = preg_replace('/[^\d]/', '', $range);
+            $from = $to = $v !== '' ? (float)$v : null;
         }
 
-        // 投保薪資
-        $insured_salary = is_numeric($salary) ? (int)$salary : null;
+        $base = (float)preg_replace('/[^\d]/', '', $wage);
+        if ($base <= 0) continue;
 
-        // 民國年轉西元
-        $src_year = null; $src_month = null;
-        if (preg_match('/^(\d{3})[\/\-\.](\d{1,2})/', $date, $m)) {
-            $src_year  = 1911 + (int)$m[1];
-            $src_month = (int)$m[2];
+        // 生效日期（可能是民國年 112/01）
+        $eff = null;
+        if (preg_match('/^(\d{3,4})[\/\-\.](\d{1,2})/u', $date, $mm)) {
+            $yy = (int)$mm[1];
+            $mn = (int)$mm[2];
+            if ($yy < 1911) $yy += 1911;
+            $eff = sprintf('%04d-%02d-01', $yy, $mn);
         }
-        $effective_date = ($src_year && $src_month)
-            ? sprintf('%04d-%02d-01', $src_year, $src_month)
-            : null;
 
         $ins->execute([
-            ':grade' => $grade,
-            ':salary_from' => $salary_from,
-            ':salary_to' => $salary_to,
-            ':insured_salary' => $insured_salary,
-            ':effective_date' => $effective_date,
-            ':note' => $note,
-            ':src_year' => $src_year,
-            ':src_month' => $src_month,
+            ':lv'   => (int)preg_replace('/\D/', '', $lv),
+            ':min'  => $from,
+            ':max'  => $to,
+            ':base' => $base,
+            ':cat'  => $note,
+            ':eff'  => $eff
         ]);
         $n++;
     }
+    fclose($fh);
 
-    // 4️⃣ 更新正式表
-    //   - 清空正式表
-    //   - 將暫存表資料搬過去
     $pdo->beginTransaction();
     $pdo->exec("TRUNCATE TABLE `$table`");
-    $pdo->exec("INSERT INTO `$table` SELECT * FROM `$tmpTable`");
+    // tmp 與正式表欄位一致，用 SELECT 指定欄位搬運（避免 * 誤差）
+    $pdo->exec("
+        INSERT INTO `$table` (level_no, wage_min, wage_max, base_amount, category, effective_date)
+        SELECT level_no, wage_min, wage_max, base_amount, category, effective_date
+        FROM `$tmpTable`
+    ");
     $pdo->commit();
 
-    echo json_encode([
-        'ok' => true,
-        'count' => $n,
-        'message' => "成功更新 $table，共 $n 筆資料"
-    ], JSON_UNESCAPED_UNICODE);
-
+    echo json_encode(['ok' => true, 'count' => $n, 'source' => $csvUrl], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
-    if ($pdo && $pdo->inTransaction()) $pdo->rollBack();
+    if (!empty($pdo) && $pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);
-    echo json_encode([
-        'ok' => false,
-        'error' => $e->getMessage(),
-        'line' => $e->getLine()
-    ], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }

@@ -4,23 +4,64 @@
 // - 進頁先讀 status
 // - 監聽 app.js 的 govSyncProgress（登入時背景同步）
 // - 手動「立即更新」：同時觸發三支 sync 並輪詢 status
+// - 強化：逾時保護 / 單頁只跑一輪輪詢 / 依最新生效日自動判定完成
 // ------------------------------------------------------
 (() => {
-  const BTN = document.getElementById('btnGovRefresh');
-  if (!BTN) return; // 只在有按鈕的頁面啟動（dashboard）
+  'use strict';
 
-  const els = {
-    lpEff: document.getElementById('lpEffective'),
-    lpUpd: document.getElementById('lpUpdated'),
-    lpSt:  document.getElementById('lpStatus'),
-    liEff: document.getElementById('liEffective'),
-    liUpd: document.getElementById('liUpdated'),
-    liSt:  document.getElementById('liStatus'),
-    nhiEff:document.getElementById('nhiEffective'),
-    nhiUpd:document.getElementById('nhiUpdated'),
-    nhiSt: document.getElementById('nhiStatus'),
-  };
+  // ---- 可調參數 ----
+  const STATUS_TIMEOUT_MS = 8000;   // 單次讀取 status 逾時
+  const SYNC_TIMEOUT_MS   = 15000;  // 啟動同步逾時（只負責觸發，不等完成）
+  const POLL_INTERVAL_MS  = 3000;   // 輪詢間隔
+  const MAX_POLL_MS       = 120000; // 最長輪詢 2 分鐘後自動停止以免卡住
 
+  // ---- 工具：帶逾時的 fetch（text→JSON 嘗試）----
+  async function fetchJSONWithTimeout(url, { timeout = 10000, ...opt } = {}) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(new Error('timeout')), timeout);
+    try {
+      const res = await fetch(url, {
+        credentials: 'same-origin',
+        cache: 'no-cache',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', ...(opt.headers || {}) },
+        signal: ctrl.signal,
+        ...opt
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        const err = new Error(`HTTP ${res.status}`);
+        err.status = res.status;
+        err.body = text;
+        throw err;
+      }
+      try {
+        return JSON.parse(text);
+      } catch {
+        // 非 JSON 也回傳原文，讓呼叫端自行處理
+        return { _raw: text };
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function fetchWithTimeout(url, { timeout = 10000, ...opt } = {}) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(new Error('timeout')), timeout);
+    try {
+      return await fetch(url, {
+        credentials: 'same-origin',
+        cache: 'no-cache',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', ...(opt.headers || {}) },
+        signal: ctrl.signal,
+        ...opt
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // ---- 常數路徑 ----
   const STATUS = {
     li:  '/api/opendata/gov_labor_insurance.php?mode=status',
     lp:  '/api/opendata/gov_labor_pension.php?mode=status',
@@ -32,115 +73,174 @@
     nhi: '/api/opendata/gov_nhi.php?mode=sync',
   };
 
-  let pollTimer = null;
-  const running = { li:false, lp:false, nhi:false };
+  // ---- DOMContentLoaded 後再抓元素，避免提早 return ----
+  window.addEventListener('DOMContentLoaded', () => {
+    const BTN = document.getElementById('btnGovRefresh');
+    if (!BTN) return; // 僅在 dashboard 有此按鈕時啟動
 
-  function setBtnState(isRunning) {
-    if (isRunning) {
-      BTN.disabled = true;
-      BTN.title = '更新中，請稍後';
-      BTN.setAttribute('aria-busy', 'true');
-      BTN.classList.add('is-busy');
-    } else {
-      BTN.disabled = false;
-      BTN.title = '立即更新';
-      BTN.setAttribute('aria-busy', 'false');
-      BTN.classList.remove('is-busy');
+    const els = {
+      lpEff: document.getElementById('lpEffective'),
+      lpUpd: document.getElementById('lpUpdated'),
+      lpSt:  document.getElementById('lpStatus'),
+      liEff: document.getElementById('liEffective'),
+      liUpd: document.getElementById('liUpdated'),
+      liSt:  document.getElementById('liStatus'),
+      nhiEff:document.getElementById('nhiEffective'),
+      nhiUpd:document.getElementById('nhiUpdated'),
+      nhiSt: document.getElementById('nhiStatus'),
+    };
+
+    // 追蹤狀態
+    let pollTimer = null;
+    let pollStartedAt = 0;
+    const running = { li:false, lp:false, nhi:false };
+    const lastEff = { li:null, lp:null, nhi:null }; // 紀錄上次看到的 latest_date；變化代表資料更新完成
+
+    // ---- UI helpers ----
+    function setBtnState(isRunning) {
+      if (!BTN) return;
+      if (isRunning) {
+        BTN.disabled = true;
+        BTN.title = '更新中，請稍後';
+        BTN.setAttribute('aria-busy', 'true');
+        BTN.classList.add('is-busy');
+      } else {
+        BTN.disabled = false;
+        BTN.title = '立即更新';
+        BTN.setAttribute('aria-busy', 'false');
+        BTN.classList.remove('is-busy');
+      }
     }
-  }
-
-  function markCardUpdating(key) {
-    const st = els[`${key}St`];
-    if (st) st.innerHTML = '<span class="spinner"></span> 同步中…';
-  }
-  function clearCardStatus(key) {
-    const st = els[`${key}St`];
-    if (st) st.textContent = '';
-  }
-  function fillCard(key, data) {
-    const eff = els[`${key}Eff`];
-    const upd = els[`${key}Upd`];
-    if (eff) eff.textContent = data?.latest_date || '—';
-    if (upd) upd.textContent = data?.updated_at   || '—';
-    clearCardStatus(key);
-  }
-
-  async function getStatusOne(key) {
-    try {
-      const r = await fetch(STATUS[key], { credentials: 'same-origin', cache: 'no-cache' });
-      const j = await r.json().catch(() => null);
-      return j || {};
-    } catch {
-      return {};
+    function markCardUpdating(key) {
+      const st = els[`${key}St`];
+      if (st) st.innerHTML = '<span class="spinner"></span> 同步中…';
     }
-  }
-  async function refreshAllStatus() {
-    const [li, lp, nhi] = await Promise.all([getStatusOne('li'), getStatusOne('lp'), getStatusOne('nhi')]);
-    fillCard('li', li);
-    fillCard('lp', lp);
-    fillCard('nhi', nhi);
-  }
+    function setCardError(key, msg) {
+      const st = els[`${key}St`];
+      if (st) st.textContent = msg || '失敗';
+    }
+    function clearCardStatus(key) {
+      const st = els[`${key}St`];
+      if (st) st.textContent = '';
+    }
+    function fillCard(key, data) {
+      const eff = els[`${key}Eff`];
+      const upd = els[`${key}Upd`];
+      const latest = (data && (data.latest_date || data.latest || data.effective_date)) || '—';
+      const updatedAt = (data && (data.updated_at || data.updated)) || '—';
 
-  function startPolling() {
-    if (pollTimer) return;
-    pollTimer = setInterval(async () => {
-      await refreshAllStatus();
-      // 若都不在 running 就停輪詢與解鎖按鈕
-      if (!running.li && !running.lp && !running.nhi) {
+      if (eff) eff.textContent = latest;
+      if (upd) upd.textContent = updatedAt;
+
+      // 若 latest_date 與上次不同且不為破折號，視為此 service 完成
+      if (latest && latest !== '—' && lastEff[key] !== null && lastEff[key] !== latest) {
+        running[key] = false;
+      }
+      // 初始化記錄（第一次讀到資料）
+      if (lastEff[key] === null && latest && latest !== '—') {
+        lastEff[key] = latest;
+      } else if (latest && latest !== '—') {
+        lastEff[key] = latest;
+      }
+
+      clearCardStatus(key);
+    }
+
+    // ---- 狀態讀取 ----
+    async function getStatusOne(key) {
+      try {
+        const j = await fetchJSONWithTimeout(STATUS[key], { timeout: STATUS_TIMEOUT_MS });
+        // 允許多種結構：{ok:true,data:{...}} 或直接 {...}
+        if (j && j.data) return j.data;
+        return j || {};
+      } catch {
+        return {};
+      }
+    }
+
+    async function refreshAllStatus() {
+      const [li, lp, nhi] = await Promise.all([
+        getStatusOne('li'),
+        getStatusOne('lp'),
+        getStatusOne('nhi'),
+      ]);
+      fillCard('li', li);
+      fillCard('lp', lp);
+      fillCard('nhi', nhi);
+    }
+
+    // ---- 輪詢 ----
+    function stopPolling() {
+      if (pollTimer) {
         clearInterval(pollTimer);
         pollTimer = null;
-        setBtnState(false);
       }
-    }, 3000);
-  }
-
-  async function triggerSyncOne(key) {
-    try {
-      running[key] = true;
-      markCardUpdating(key);
-      await fetch(SYNC[key], { credentials: 'same-origin', cache: 'no-cache' });
-      // 不等待 JSON，讓它在背景完成
-    } catch (e) {
-      const st = els[`${key}St`];
-      if (st) st.textContent = '啟動失敗';
-      running[key] = false;
+      setBtnState(false);
     }
-  }
 
-  async function triggerAllSync() {
-    setBtnState(true);
-    markCardUpdating('li'); markCardUpdating('lp'); markCardUpdating('nhi');
-    running.li = running.lp = running.nhi = true;
+    function startPolling() {
+      if (pollTimer) return;
+      pollStartedAt = Date.now();
+      pollTimer = setInterval(async () => {
+        await refreshAllStatus();
 
-    // 並行啟動三支
-    triggerSyncOne('li');
-    triggerSyncOne('lp');
-    triggerSyncOne('nhi');
+        const allStopped = !running.li && !running.lp && !running.nhi;
+        const overTime = Date.now() - pollStartedAt > MAX_POLL_MS;
 
-    // 開始輪詢直到完成
-    startPolling();
-  }
+        if (allStopped || overTime) {
+          stopPolling();
+        }
+      }, POLL_INTERVAL_MS);
+    }
 
-  // 監聽 app.js 發出的事件：登入後自動同步時即時顯示「同步中」
-  window.addEventListener('govSyncProgress', (ev) => {
-    const { service, status } = ev.detail || {};
-    if (!service) return;
-    if (status === 'running') {
-      running[service] = true;
-      markCardUpdating(service);
+    // ---- 同步觸發 ----
+    async function triggerSyncOne(key) {
+      try {
+        running[key] = true;
+        markCardUpdating(key);
+        await fetchWithTimeout(SYNC[key], { timeout: SYNC_TIMEOUT_MS, method: 'GET' });
+        // 不等待回傳內容，背景完成；完成訊號由：
+        // 1) app.js 的 govSyncProgress: done/error （若有）
+        // 2) 或 polling 偵測 latest_date 變化 來結束
+      } catch (e) {
+        setCardError(key, '啟動失敗');
+        running[key] = false;
+      }
+    }
+
+    async function triggerAllSync() {
       setBtnState(true);
+      // 標記 running & 顯示 spinner
+      ['li','lp','nhi'].forEach(k => {
+        running[k] = true;
+        markCardUpdating(k);
+      });
+      // 並行啟動
+      triggerSyncOne('li');
+      triggerSyncOne('lp');
+      triggerSyncOne('nhi');
+      // 開始輪詢
       startPolling();
-    } else if (status === 'done' || status === 'error') {
-      running[service] = false;
-      // 狀態會在輪詢取回後覆蓋顯示
     }
-  });
 
-  // 綁定手動按鈕
-  BTN.addEventListener('click', triggerAllSync);
+    // ---- 事件：接收 app.js 的背景同步進度 ----
+    window.addEventListener('govSyncProgress', (ev) => {
+      const { service, status } = ev.detail || {};
+      if (!service) return;
+      if (status === 'running') {
+        running[service] = true;
+        markCardUpdating(service);
+        setBtnState(true);
+        startPolling();
+      } else if (status === 'done' || status === 'error') {
+        running[service] = false;
+        // 顯示會在下一輪 refreshAllStatus 更新
+      }
+    });
 
-  // 進頁先載入一次狀態
-  document.addEventListener('DOMContentLoaded', () => {
+    // ---- 綁定按鈕 & 首次載入 ----
+    BTN.addEventListener('click', triggerAllSync);
+    // 進頁先載一次狀態
     refreshAllStatus();
   });
 })();

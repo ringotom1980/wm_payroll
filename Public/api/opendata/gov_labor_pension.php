@@ -76,9 +76,9 @@ try {
     if (!$data) throw new RuntimeException('CSV 內容未解析出有效資料列');
 
     // 5) 清空並寫入
-    $pdo->beginTransaction();
     $pdo->exec("TRUNCATE TABLE `{$table}`");
-
+    $pdo->beginTransaction();
+    
     $sql = "INSERT INTO `{$table}` (level_no, wage_min, wage_max, base_amount, effective_date)
             VALUES (:level_no, :wage_min, :wage_max, :base_amount, :effective_date)";
     $stmt = $pdo->prepare($sql);

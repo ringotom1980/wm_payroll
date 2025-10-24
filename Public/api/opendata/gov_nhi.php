@@ -18,7 +18,7 @@ function fetch_json($url){
       CURLOPT_RETURNTRANSFER => true,
       CURLOPT_FOLLOWLOCATION => true,
       CURLOPT_TIMEOUT => 30,
-      CURLOPT_SSL_VERIFYPEER => true,
+      CURLOPT_SSL_VERIFYPEER => false,
     ]);
     $res = curl_exec($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);

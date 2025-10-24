@@ -18,7 +18,7 @@ function fetch_raw(string $url): ?string {
       CURLOPT_FOLLOWLOCATION => true,
       CURLOPT_CONNECTTIMEOUT => 10,
       CURLOPT_TIMEOUT        => 30,
-      CURLOPT_SSL_VERIFYPEER => true,
+      CURLOPT_SSL_VERIFYPEER => false,
       CURLOPT_HTTPHEADER     => ['Accept: application/json'],
     ]);
     $res = curl_exec($ch);

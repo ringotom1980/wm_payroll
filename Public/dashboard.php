@@ -14,6 +14,7 @@ require __DIR__ . '/partials/header.php';
 
 <title><?= $APP_NAME ?>｜儀表板</title>
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
+<link href="/assets/css/dashboard.css?v=1" rel="stylesheet">
 </head>
 
 <body>
@@ -167,7 +168,7 @@ require __DIR__ . '/partials/header.php';
   </main>
 
   <?php require __DIR__ . '/partials/footer.php'; ?>
-  <script src="/assets/js/dashboard.js?v=4"></script>
+  <script src="/assets/js/dashboard.js?v=5"></script>
 </body>
 
 </html>

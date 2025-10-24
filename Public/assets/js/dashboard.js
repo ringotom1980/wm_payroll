@@ -1,44 +1,5 @@
 // Public/assets/js/dashboard.js
 // ------------------------------------------------------
-// 保留：舊的「dashboard 簡版同步」按鈕（若仍存在於某頁就能運作）
-// ------------------------------------------------------
-async function refreshGovRates() {
-  const btn = document.getElementById('btnSync');
-  const msg = document.getElementById('syncMsg');
-  if (!btn || !msg) return;
-
-  btn.disabled = true;
-  msg.textContent = '同步中…';
-
-  try {
-    const res = await fetch('/api/refresh_gov_rates.php', {
-      method: 'POST',
-      headers: {'Accept':'application/json'},
-      credentials: 'same-origin'
-    });
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok || !json.ok) {
-      const err = (json.errors && JSON.stringify(json.errors)) || json.error || res.statusText || '發生錯誤';
-      throw new Error(err);
-    }
-
-    msg.textContent = '完成！請重新整理查看最新統計。';
-    setTimeout(() => location.reload(), 800);
-  } catch (e) {
-    console.error(e);
-    msg.textContent = '失敗：' + (e.message || e);
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.getElementById('btnSync');
-  if (btn) btn.addEventListener('click', refreshGovRates);
-});
-
-// ------------------------------------------------------
 // 新增：政府 opendata 三卡狀態模組（LP/LI/NHI）
 // - 手動更新按鈕鎖定（背景跑時）
 // - 進頁即查狀態；running=true 時顯示轉圈並輪詢到完成

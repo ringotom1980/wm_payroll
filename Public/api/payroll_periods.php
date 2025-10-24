@@ -54,18 +54,10 @@ try {
             WHERE status IN ("APPROVAL_PENDING","PAY_PENDING","PENDING")
         ', [], 0);
 
-        // 政府資料最後同步時間（若表名不同請調整）
-        $lastSyncRow = $fetchOne('
-            SELECT DATE_FORMAT(MAX(updated_at), "%Y-%m-%d %H:%i") AS ts
-            FROM gov_rate_snapshots
-        ');
-        $govLastSync = ($lastSyncRow && $lastSyncRow['ts']) ? $lastSyncRow['ts'] : '—';
-
         echo json_encode([
             'employees'       => (int) $employees,
             'active_periods'  => (int) $activePeriods,
             'pending'         => (int) $pendingApprovals,
-            'gov_last_sync'   => $govLastSync,
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }

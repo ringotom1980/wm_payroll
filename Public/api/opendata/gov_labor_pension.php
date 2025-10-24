@@ -1,135 +1,315 @@
 <?php
 // Public/api/opendata/gov_labor_pension.php
-// 勞退提繳分級（CSV 版）— 由 data.gov.tw metadata 取 CSV → 匯入
-// datasetId: 6274
+// 勞退提繳工資等級表（CSV 下載 → 解析 → 清空 → 寫入 gov_labor_pension）
+// 回傳 JSON：{ ok:1, inserted: N, message: "...", sample: {...} }
+
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
-$datasetId = 6274;
-$table     = 'gov_labor_pension';
-$tmpTable  = 'gov_labor_pension_tmp';
-
-$mode = $_GET['mode'] ?? 'sync';
+const SRC_URL = 'https://apiservice.mol.gov.tw/OdService/download/A17000000J-020031-PFu';
+$table = 'gov_labor_pension';
 
 try {
     /** @var PDO $pdo */
     $pdo = require __DIR__ . '/../../../config/db.php';
+    if (!$pdo instanceof PDO) {
+        throw new RuntimeException('DB 連線失敗：config/db.php 未回傳 PDO 實例');
+    }
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    if ($mode === 'status') {
-        $stmt = $pdo->query("SELECT COUNT(*) cnt, MAX(effective_date) latest_date, MAX(created_at) updated_at FROM `{$table}`");
-        $r = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
-        echo json_encode([
-            'ok' => true,
-            'cnt' => (int)($r['cnt'] ?? 0),
-            'latest_date' => $r['latest_date'] ?: null,
-            'updated_at'  => $r['updated_at'] ?: null,
-        ], JSON_UNESCAPED_UNICODE);
-        exit;
+    // 1) 抓 CSV 原始內容（cURL 優先、file_get_contents 後備）
+    $raw = fetch_raw(SRC_URL);
+    if ($raw === null || $raw === '') {
+        throw new RuntimeException('下載失敗或空白內容');
     }
 
-    // ---- sync ----
-    $metaUrl = "https://data.gov.tw/api/v1/dataset/{$datasetId}";
-    $ctx = stream_context_create([
-        'http' => ['timeout' => 15, 'header' => "Accept: application/json\r\nUser-Agent: wm-payroll/1.0\r\n"]
-    ]);
-    $meta = json_decode(@file_get_contents($metaUrl, false, $ctx), true);
-    if (!$meta || empty($meta['resources'])) throw new Exception('讀取 metadata 失敗或無資源');
+    // 2) 正常化編碼（常見為 UTF-8 / Big5）
+    $raw = normalize_encoding($raw);
 
-    $csvRes = null;
-    foreach ($meta['resources'] as $r) {
-        if (isset($r['format']) && strcasecmp($r['format'], 'CSV') === 0 && !empty($r['url'])) {
-            $csvRes = $r; break;
+    // 3) 解析 CSV
+    [$headers, $rows] = parse_csv($raw);
+    if (empty($headers)) {
+        throw new RuntimeException('CSV 標題列解析失敗');
+    }
+
+    // 4) 建立欄位對應（盡量容錯）
+    $map = detect_columns($headers);
+    if (!$map['level'] || (!$map['wage_range'] && !($map['wage_min'] && $map['wage_max'])) ) {
+        // 至少需要 等級 以及（範圍 或 上下限）
+        throw new RuntimeException('必要欄位不足（等級／薪資範圍或上下限）');
+    }
+
+    // 5) 轉資料
+    $data = [];
+    foreach ($rows as $r) {
+        $level_no = parse_int($r[$map['level']] ?? null);
+
+        // 薪資區間
+        $wmin = null; $wmax = null;
+        if ($map['wage_range']) {
+            [$wmin, $wmax] = parse_wage_range((string)($r[$map['wage_range']] ?? ''));
         }
-    }
-    if (!$csvRes) throw new Exception('找不到 CSV 資源');
-    $csvUrl = $csvRes['url'];
-    $updated = $csvRes['updated'] ?? null;
+        if ($map['wage_min']) $wmin = parse_money($r[$map['wage_min']] ?? null, $wmin);
+        if ($map['wage_max']) $wmax = parse_money($r[$map['wage_max']] ?? null, $wmax);
 
-    // 下載 CSV
-    $raw = @file_get_contents($csvUrl, false, stream_context_create(['http'=>['timeout'=>30,'header'=>"User-Agent: wm-payroll/1.0\r\n"]]));
-    if ($raw === false) throw new Exception("下載失敗：$csvUrl");
-    $raw = mb_convert_encoding($raw, 'UTF-8', 'auto');
-
-    $fh = fopen('php://memory', 'r+');
-    fwrite($fh, $raw);
-    rewind($fh);
-    $headers = fgetcsv($fh);
-    if (!$headers) throw new Exception('CSV 無標題列');
-
-    $idx = ['level' => -1, 'range' => -1, 'wage' => -1, 'date' => -1];
-    foreach ($headers as $i => $h) {
-        $h = trim((string)$h);
-        if ($idx['level'] < 0 && (mb_strpos($h, '等級') !== false || mb_strpos($h, '級') !== false)) $idx['level'] = $i;
-        if ($idx['range'] < 0 && (mb_strpos($h, '實際工資') !== false || mb_strpos($h, '區間') !== false || mb_strpos($h, '級距') !== false)) $idx['range'] = $i;
-        if ($idx['wage']  < 0 && (mb_strpos($h, '月提繳工資') !== false || mb_strpos($h, '提繳工資') !== false)) $idx['wage']  = $i;
-        if ($idx['date']  < 0 && (mb_strpos($h, '生效') !== false || mb_strpos($h, '日期') !== false)) $idx['date']  = $i;
-    }
-    if ($idx['range'] < 0 || $idx['wage'] < 0) throw new Exception('CSV 欄位無法對應（需要：實際工資/區間、月提繳工資）');
-
-    $pdo->exec("TRUNCATE TABLE `{$tmpTable}`");
-    $ins = $pdo->prepare("
-        INSERT INTO `{$tmpTable}` (level_no, wage_min, wage_max, base_amount, effective_date)
-        VALUES (:lv, :min, :max, :base, :eff)
-    ");
-
-    $n = 0;
-    while (($row = fgetcsv($fh)) !== false) {
-        if (count($row) < max($idx) + 1) continue;
-
-        $lv   = $idx['level'] >= 0 ? trim((string)$row[$idx['level']]) : '';
-        $range= trim((string)$row[$idx['range']]);
-        $wage = trim((string)$row[$idx['wage']]);
-        $date = $idx['date'] >= 0 ? trim((string)($row[$idx['date']] ?? '')) : '';
-
-        $from = null; $to = null;
-        if (preg_match('/(\d+)\s*[~至-]\s*(\d+)/u', $range, $m)) {
-            $from = (float)$m[1]; $to = (float)$m[2];
-        } elseif (preg_match('/(\d+)\s*元\s*以上/u', $range, $m)) {
-            $from = (float)$m[1]; $to = null;
+        // 提繳基數（若無，留 NULL；若有「提繳工資」「本薪」「基數」之類就取）
+        $base_amount = null;
+        if ($map['base_amount']) {
+            $base_amount = parse_money($r[$map['base_amount']] ?? null, null);
         } else {
-            $v = preg_replace('/[^\d]/', '', $range);
-            $from = $to = $v !== '' ? (float)$v : null;
+            // 有些資料會直接用區間下限當基數，這裡不強制推論；若你想要以 wmin 當基數，取消下行註解：
+            // $base_amount = $wmin;
         }
 
-        $base = (float)preg_replace('/[^\d]/', '', $wage);
-        if ($base <= 0) continue;
-
-        $eff = null;
-        if ($updated) {
-            $u = substr($updated, 0, 10);
-            if (preg_match('/^(\d{4})-(\d{2})-\d{2}$/', $u, $mm)) {
-                $eff = sprintf('%s-%s-01', $mm[1], $mm[2]);
-            }
-        } elseif (preg_match('/^(\d{3,4})[\/\-\.](\d{1,2})/u', $date, $mm)) {
-            $yy = (int)$mm[1]; $mn = (int)$mm[2];
-            if ($yy < 1911) $yy += 1911;
-            $eff = sprintf('%04d-%02d-01', $yy, $mn);
+        // 生效日期（民國/西元自動）
+        $effective_date = null;
+        if ($map['effective_date']) {
+            $effective_date = parse_date_roc_or_gregorian((string)($r[$map['effective_date']] ?? ''));
         }
 
-        $ins->execute([
-            ':lv'   => (int)preg_replace('/\D/', '', $lv),
-            ':min'  => $from,
-            ':max'  => $to,
-            ':base' => $base,
-            ':eff'  => $eff
-        ]);
-        $n++;
+        if ($level_no === null || ($wmin === null && $wmax === null)) {
+            // 跳過明顯不完整列
+            continue;
+        }
+
+        $data[] = [
+            'level_no'       => $level_no,
+            'wage_min'       => $wmin,
+            'wage_max'       => $wmax,
+            'base_amount'    => $base_amount,
+            'effective_date' => $effective_date,
+        ];
     }
-    fclose($fh);
 
+    if (!$data) {
+        throw new RuntimeException('CSV 內容未解析出有效資料列');
+    }
+
+    // 6) 清空並寫入
     $pdo->beginTransaction();
     $pdo->exec("TRUNCATE TABLE `{$table}`");
-    $pdo->exec("
-        INSERT INTO `{$table}` (level_no, wage_min, wage_max, base_amount, effective_date)
-        SELECT level_no, wage_min, wage_max, base_amount, effective_date
-        FROM `{$tmpTable}`
-    ");
+
+    $sql = "INSERT INTO `{$table}` (level_no, wage_min, wage_max, base_amount, effective_date)
+            VALUES (:level_no, :wage_min, :wage_max, :base_amount, :effective_date)";
+    $stmt = $pdo->prepare($sql);
+
+    $inserted = 0;
+    foreach ($data as $row) {
+        $stmt->execute([
+            ':level_no'       => $row['level_no'],
+            ':wage_min'       => $row['wage_min'],
+            ':wage_max'       => $row['wage_max'],
+            ':base_amount'    => $row['base_amount'],
+            ':effective_date' => $row['effective_date'],
+        ]);
+        $inserted++;
+    }
     $pdo->commit();
 
-    echo json_encode(['ok' => true, 'count' => $n, 'source' => $csvUrl, 'updated' => $updated], JSON_UNESCAPED_UNICODE);
+    echo json_encode([
+        'ok' => 1,
+        'inserted' => $inserted,
+        'message' => 'gov_labor_pension 已重載完成',
+        'sample' => $data[0] ?? null,
+        'headers_detected' => $map,
+    ], JSON_UNESCAPED_UNICODE);
+
 } catch (Throwable $e) {
-    if (!empty($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => 0, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+}
+
+
+// ------------------------ Functions ------------------------
+
+/** 下載原始資料（cURL 優先，file_get_contents 後備） */
+function fetch_raw(string $url): ?string {
+    // cURL
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT => 60,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_HTTPHEADER => ['Accept: text/csv, */*'],
+            CURLOPT_USERAGENT => 'wm_payroll-opendata-fetcher/1.0',
+        ]);
+        $resp = curl_exec($ch);
+        $err  = curl_error($ch);
+        $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        if ($resp !== false && $code >= 200 && $code < 300) {
+            return $resp;
+        }
+        if ($err) {
+            // 繼續嘗試 fallback
+        }
+    }
+    // fallback
+    $ctx = stream_context_create([
+        'http' => ['timeout' => 60, 'header' => "User-Agent: wm_payroll-opendata-fetcher/1.0\r\n"]
+    ]);
+    $resp = @file_get_contents($url, false, $ctx);
+    return ($resp !== false) ? $resp : null;
+}
+
+/** 嘗試轉為 UTF-8 */
+function normalize_encoding(string $s): string {
+    // 去除 UTF-8 BOM
+    if (substr($s, 0, 3) === "\xEF\xBB\xBF") {
+        $s = substr($s, 3);
+    }
+    // 非 UTF-8 時嘗試從 BIG5 轉
+    if (!mb_check_encoding($s, 'UTF-8')) {
+        $converted = @iconv('BIG5', 'UTF-8//IGNORE', $s);
+        if ($converted !== false) return $converted;
+        $converted = @iconv('CP950', 'UTF-8//IGNORE', $s);
+        if ($converted !== false) return $converted;
+    }
+    return $s;
+}
+
+/** 解析 CSV → [headers[], rows[]] */
+function parse_csv(string $raw): array {
+    $fp = fopen('php://temp', 'r+');
+    fwrite($fp, $raw);
+    rewind($fp);
+
+    $headers = null;
+    $rows = [];
+    // 嘗試常見分隔（逗號為主）
+    while (($cols = fgetcsv($fp, 0, ',')) !== false) {
+        // 忽略全空行
+        if (count(array_filter($cols, fn($v) => trim((string)$v) !== '')) === 0) {
+            continue;
+        }
+        if ($headers === null) {
+            // 首列當標題
+            $headers = array_map('trim', $cols);
+            continue;
+        }
+        // 一般資料列
+        $row = [];
+        foreach ($headers as $i => $h) {
+            $row[$i] = $cols[$i] ?? null;
+        }
+        $rows[] = $row;
+    }
+    fclose($fp);
+
+    return [$headers ?? [], $rows];
+}
+
+/** 偵測欄位索引（容錯、關鍵字比對） */
+function detect_columns(array $headers): array {
+    $norm = [];
+    foreach ($headers as $i => $h) {
+        $norm[$i] = preg_replace('/\s+/', '', trim((string)$h));
+    }
+
+    $map = [
+        'level'         => null,
+        'wage_range'    => null,
+        'wage_min'      => null,
+        'wage_max'      => null,
+        'base_amount'   => null,
+        'effective_date'=> null,
+    ];
+
+    foreach ($norm as $i => $h) {
+        // 等級
+        if (preg_match('/等級|級距|級別|級$/u', $h)) {
+            $map['level'] = $i;
+            continue;
+        }
+        // 上下限
+        if (preg_match('/(薪資)?下限|min/i', $h)) $map['wage_min'] = $i;
+        if (preg_match('/(薪資)?上限|max/i', $h)) $map['wage_max'] = $i;
+
+        // 範圍/區間（例如「23,100-24,000」）
+        if (preg_match('/(薪資|工資|月提繳|提繳)?(範圍|區間|級距|分級)/u', $h)) {
+            if ($map['wage_range'] === null) $map['wage_range'] = $i;
+        }
+
+        // 提繳基數/工資/本薪
+        if (preg_match('/(提繳|投保)?(工資|基數)|本薪|本俸/u', $h)) {
+            if ($map['base_amount'] === null) $map['base_amount'] = $i;
+        }
+
+        // 生效日期/實施日期
+        if (preg_match('/(生效|實施|適用|發布)?日(期)?/u', $h)) {
+            if ($map['effective_date'] === null) $map['effective_date'] = $i;
+        }
+    }
+
+    return $map;
+}
+
+/** 解析整數 */
+function parse_int($v): ?int {
+    if ($v === null) return null;
+    $v = trim((string)$v);
+    if ($v === '') return null;
+    if (!preg_match('/^-?\d+$/', str_replace(',', '', $v))) return null;
+    return (int)str_replace(',', '', $v);
+}
+
+/** 解析金額（保留兩位），fallback 若給定 default 則回傳 default */
+function parse_money($v, $default = null): ?float {
+    if ($v === null) return $default;
+    $s = trim((string)$v);
+    if ($s === '') return $default;
+    // 去除千分位與非數字符號
+    $s = preg_replace('/[^\d\.\-]/', '', $s);
+    if ($s === '' || !is_numeric($s)) return $default;
+    return round((float)$s, 2);
+}
+
+/** 解析區間字串，如「23,100-24,000」或「23100～24000」 */
+function parse_wage_range(string $s): array {
+    $s = trim($s);
+    if ($s === '') return [null, null];
+    // 統一分隔符
+    $s = str_replace(['～', '—', '–', '至'], '-', $s);
+    if (strpos($s, '-') !== false) {
+        [$a, $b] = explode('-', $s, 2);
+        return [parse_money($a, null), parse_money($b, null)];
+    }
+    // 若只有一個數，當作單點
+    $v = parse_money($s, null);
+    return [$v, $v];
+}
+
+/** 解析日期（支援 民國YYY/MM/DD 或 西元 YYYY/MM/DD、YYYY-MM-DD）→ YYYY-MM-DD */
+function parse_date_roc_or_gregorian(string $s): ?string {
+    $s = trim($s);
+    if ($s === '') return null;
+
+    // 民國： e.g., 112/01/01 或 112.1.1
+    if (preg_match('/^(\d{2,3})[\/\.\-](\d{1,2})[\/\.\-](\d{1,2})$/', $s, $m)) {
+        $y = (int)$m[1];
+        $mth = (int)$m[2];
+        $d = (int)$m[3];
+        // 判斷是否民國（小於 1911 視為民國年）
+        if ($y < 1911) $y += 1911;
+        return sprintf('%04d-%02d-%02d', $y, $mth, $d);
+    }
+
+    // 西元：YYYY-MM-DD / YYYY/MM/DD
+    if (preg_match('/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/', $s, $m)) {
+        return sprintf('%04d-%02d-%02d', (int)$m[1], (int)$m[2], (int)$m[3]);
+    }
+
+    // 只給年月
+    if (preg_match('/^(\d{4})[\/\-](\d{1,2})$/', $s, $m)) {
+        return sprintf('%04d-%02d-01', (int)$m[1], (int)$m[2]);
+    }
+
+    // 無法判讀
+    return null;
 }

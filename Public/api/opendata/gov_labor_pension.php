@@ -207,48 +207,87 @@ function parse_csv(string $raw): array {
 
 /** 偵測欄位索引（容錯、關鍵字比對） */
 function detect_columns(array $headers): array {
+    // 同時保留原始與簡化（去空白）
     $norm = [];
     foreach ($headers as $i => $h) {
-        $norm[$i] = preg_replace('/\s+/', '', trim((string)$h));
+        $raw = trim((string)$h);
+        $norm[$i] = [
+            'raw' => $raw,
+            'simple' => preg_replace('/\s+/', '', $raw),
+        ];
     }
 
     $map = [
-        'level'         => null,
-        'wage_range'    => null,
-        'wage_min'      => null,
-        'wage_max'      => null,
-        'base_amount'   => null,
-        'effective_date'=> null,
+        'level'          => null,
+        'wage_range'     => null,
+        'wage_min'       => null,
+        'wage_max'       => null,
+        'base_amount'    => null,
+        'effective_date' => null,
     ];
 
     foreach ($norm as $i => $h) {
-        // 等級
-        if (preg_match('/等級|級距|級別|級$/u', $h)) {
-            $map['level'] = $i;
-            continue;
-        }
-        // 上下限
-        if (preg_match('/(薪資)?下限|min/i', $h)) $map['wage_min'] = $i;
-        if (preg_match('/(薪資)?上限|max/i', $h)) $map['wage_max'] = $i;
+        $raw = $h['raw'];
+        $simple = $h['simple'];
 
-        // 範圍/區間（例如「23,100-24,000」）
-        if (preg_match('/(薪資|工資|月提繳|提繳)?(範圍|區間|級距|分級)/u', $h)) {
-            if ($map['wage_range'] === null) $map['wage_range'] = $i;
+        // 1) 等級
+        if ($map['level'] === null) {
+            if (preg_match('/^等級$|級距|級別|^級$/u', $raw) || preg_match('/等級|級距|級別|級$/u', $simple)) {
+                $map['level'] = $i;
+                continue;
+            }
         }
 
-        // 提繳基數/工資/本薪
-        if (preg_match('/(提繳|投保)?(工資|基數)|本薪|本俸/u', $h)) {
-            if ($map['base_amount'] === null) $map['base_amount'] = $i;
+        // 2) 直接標示上下限（保留舊邏輯）
+        if ($map['wage_min'] === null && preg_match('/(薪資|工資)?(下限|min)/iu', $raw)) {
+            $map['wage_min'] = $i;
+        }
+        if ($map['wage_max'] === null && preg_match('/(薪資|工資)?(上限|max)/iu', $raw)) {
+            $map['wage_max'] = $i;
         }
 
-        // 生效日期/實施日期
-        if (preg_match('/(生效|實施|適用|發布)?日(期)?/u', $h)) {
-            if ($map['effective_date'] === null) $map['effective_date'] = $i;
+        // 3) CSV 實際用語：把「實際工資/執行業務所得」視為【薪資範圍】
+        if ($map['wage_range'] === null) {
+            if (preg_match('/實際工資|執行業務所得/u', $raw)) {
+                $map['wage_range'] = $i;
+                continue;
+            }
+            // 備援：仍支援「範圍/區間/級距/分級」等用語
+            if (preg_match('/(薪資|工資|月提繳|提繳)?(範圍|區間|級距|分級)/u', $raw)) {
+                $map['wage_range'] = $i;
+                continue;
+            }
+        }
+
+        // 4) CSV 實際用語：把「月提繳工資金額/月提繳執行業務所得金額」視為【base_amount】
+        if ($map['base_amount'] === null) {
+            if (preg_match('/月提繳(工資)?金額|月提繳執行業務所得金額/u', $raw)) {
+                $map['base_amount'] = $i;
+                continue;
+            }
+            // 備援：泛用關鍵字
+            if (preg_match('/(提繳|投保)?(工資|基數)|本薪|本俸/u', $raw)) {
+                $map['base_amount'] = $i;
+                continue;
+            }
+        }
+
+        // 5) 生效/實施/適用日期
+        if ($map['effective_date'] === null) {
+            if (preg_match('/生效日|實施日|適用日|發布日/u', $raw)) {
+                $map['effective_date'] = $i;
+                continue;
+            }
+            if (preg_match('/(生效|實施|適用|發布)?日(期)?/u', $simple)) {
+                $map['effective_date'] = $i;
+                continue;
+            }
         }
     }
 
     return $map;
 }
+
 
 /** 解析整數 */
 function parse_int($v): ?int {

@@ -195,13 +195,23 @@ function normalize_row(array $r): array {
     $wmax = $toDecimal($max);
     $baseAmt = $toDecimal($base);
 
+    // 若資料沒有提供自/至欄位，改用「實際薪資月額（元）」字串來拆區間
+    if ($wmin === null && $wmax === null) {
+        $rangeStr = $get(['實際薪資月額（元）', '實際薪資月額', '實際月薪資', '實際月薪（元）', '薪資月額', '區間']);
+        if ($rangeStr !== null && $rangeStr !== '') {
+            list($rmin, $rmax) = parse_wage_range($rangeStr);
+            if ($rmin !== null) $wmin = (float)$rmin;
+            if ($rmax !== null) $wmax = (float)$rmax;
+        }
+    }
+
     return [
-        'level_no'      => $level,
-        'wage_min'      => $wmin,
-        'wage_max'      => $wmax,
-        'base_amount'   => $baseAmt,
-        'group_code'    => ($group === null ? null : (string)$group),
-        'effective_date'=> $eff,
+        'level_no'       => $level,
+        'wage_min'       => $wmin,
+        'wage_max'       => $wmax,
+        'base_amount'    => $baseAmt,
+        'group_code'     => ($group === null ? null : (string)$group),
+        'effective_date' => $eff,
     ];
 }
 
@@ -246,6 +256,38 @@ function normalize_date($s): ?string {
     // 無法判讀就丟 null
     return null;
 }
+
+// 由字串（如：28590以下 / 28591-28800 / 303001以上）解析出 [wage_min, wage_max]
+function parse_wage_range(?string $s): array {
+    if ($s === null) return [null, null];
+    $s = trim((string)$s);
+    if ($s === '') return [null, null];
+
+    // 半形化 + 去掉逗點與空白
+    if (function_exists('mb_convert_kana')) {
+        $s = mb_convert_kana($s, 'n', 'UTF-8'); // 全形數字→半形
+    }
+    $s = str_replace(['，', ',', '、', ' '], '', $s);
+
+    // 28591-28800 / 28591~28800 / 28591至28800 / 28591到28800
+    if (preg_match('/^(\d+)[\-~—–至到](\d+)$/u', $s, $m)) {
+        return [ (int)$m[1], (int)$m[2] ];
+    }
+    // 303001以上 / 303001含以上
+    if (preg_match('/^(\d+)(以上|含以上)$/u', $s, $m)) {
+        return [ (int)$m[1], null ];
+    }
+    // 28590以下 / 28590含以下 / 28590未滿
+    if (preg_match('/^(\d+)(以下|含以下|未滿)$/u', $s, $m)) {
+        return [ null, (int)$m[1] ];
+    }
+    // 小於28590 / 低於28590
+    if (preg_match('/^(小於|低於)?(\d+)$/u', $s, $m)) {
+        return [ null, (int)$m[count($m)-1] ];
+    }
+    return [null, null];
+}
+
 
 // -----------------------------
 // 主流程

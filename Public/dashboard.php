@@ -49,102 +49,103 @@ require __DIR__ . '/partials/header.php';
         <div id="kpiPendingApprovals" class="kpi-value">—</div>
         <div class="kpi-sub">期別核准/支付待辦</div>
       </div>
-      <!-- 政府opendata資料時間 -->
-      <section class="row">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">政府 opendata 資料時間</h3>
-            <div class="card-tools">
-              <button id="btnGovRefresh" class="btn" type="button" title="立即更新">手動更新</button>
-            </div>
-          </div>
-
-          <div id="govOpendataSection" class="grid-3">
-            <div id="cardLP" class="gov-card">
-              <div class="gov-title">勞退（LP）</div>
-              <div class="gov-line"><span class="muted">生效日期</span><span id="lpEffective">—</span></div>
-              <div class="gov-line"><span class="muted">資料庫更新</span><span id="lpUpdated">—</span></div>
-              <div class="gov-status" id="lpStatus"></div>
-            </div>
-
-            <div id="cardLI" class="gov-card">
-              <div class="gov-title">勞保（LI）</div>
-              <div class="gov-line"><span class="muted">生效日期</span><span id="liEffective">—</span></div>
-              <div class="gov-line"><span class="muted">資料庫更新</span><span id="liUpdated">—</span></div>
-              <div class="gov-status" id="liStatus"></div>
-            </div>
-
-            <div id="cardNHI" class="gov-card">
-              <div class="gov-title">健保（NHI）</div>
-              <div class="gov-line"><span class="muted">生效日期</span><span id="nhiEffective">—</span></div>
-              <div class="gov-line"><span class="muted">資料庫更新</span><span id="nhiUpdated">—</span></div>
-              <div class="gov-status" id="nhiStatus"></div>
-            </div>
+    </section>
+    <!-- 政府opendata資料時間 -->
+    <section class="row">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">政府 opendata 資料時間</h3>
+          <div class="card-tools">
+            <button id="btnGovRefresh" class="btn" type="button" title="立即更新">手動更新</button>
           </div>
         </div>
-      </section>
 
-      <!-- 近期異動 -->
-      <section class="row">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">近期異動</h3>
-            <div class="card-tools">
-              <button id="btnReloadRecent" class="btn-ghost" type="button">重新整理</button>
-            </div>
+        <div id="govOpendataSection" class="grid-3">
+          <div id="cardLP" class="gov-card">
+            <div class="gov-title">勞退（LP）</div>
+            <div class="gov-line"><span class="muted">生效日期</span><span id="lpEffective">—</span></div>
+            <div class="gov-line"><span class="muted">資料庫更新</span><span id="lpUpdated">—</span></div>
+            <div class="gov-status" id="lpStatus"></div>
           </div>
 
-          <div class="table-wrap">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th style="width:160px">時間</th>
-                  <th style="width:140px">模組</th>
-                  <th>內容</th>
-                  <th style="width:120px">操作人</th>
-                </tr>
-              </thead>
-              <tbody id="recentChangesBody">
-                <tr>
-                  <td colspan="4" class="muted center">載入中…</td>
-                </tr>
-              </tbody>
-            </table>
+          <div id="cardLI" class="gov-card">
+            <div class="gov-title">勞保（LI）</div>
+            <div class="gov-line"><span class="muted">生效日期</span><span id="liEffective">—</span></div>
+            <div class="gov-line"><span class="muted">資料庫更新</span><span id="liUpdated">—</span></div>
+            <div class="gov-status" id="liStatus"></div>
           </div>
 
-          <div class="pager" id="recentPager">
-            <button id="recentPrev" class="btn-ghost" type="button">上一頁</button>
-            <span id="recentPgInfo" class="muted">—</span>
-            <button id="recentNext" class="btn-ghost" type="button">下一頁</button>
+          <div id="cardNHI" class="gov-card">
+            <div class="gov-title">健保（NHI）</div>
+            <div class="gov-line"><span class="muted">生效日期</span><span id="nhiEffective">—</span></div>
+            <div class="gov-line"><span class="muted">資料庫更新</span><span id="nhiUpdated">—</span></div>
+            <div class="gov-status" id="nhiStatus"></div>
           </div>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <!-- 月度統計（簡表） -->
-      <section class="row">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">本月薪資概覽</h3>
-            <div class="card-tools">
-              <a class="link" href="/modules/payroll_yearstats.php">前往年度統計</a>
-            </div>
-          </div>
-          <div class="grid-3">
-            <div>
-              <div class="muted">已計薪人數</div>
-              <div id="sumCalcCount" class="stat">—</div>
-            </div>
-            <div>
-              <div class="muted">本月總薪資</div>
-              <div id="sumPayroll" class="stat">—</div>
-            </div>
-            <div>
-              <div class="muted">已支付金額</div>
-              <div id="sumPaid" class="stat">—</div>
-            </div>
+    <!-- 近期異動 -->
+    <section class="row">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">近期異動</h3>
+          <div class="card-tools">
+            <button id="btnReloadRecent" class="btn-ghost" type="button">重新整理</button>
           </div>
         </div>
-      </section>
+
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width:160px">時間</th>
+                <th style="width:140px">模組</th>
+                <th>內容</th>
+                <th style="width:120px">操作人</th>
+              </tr>
+            </thead>
+            <tbody id="recentChangesBody">
+              <tr>
+                <td colspan="4" class="muted center">載入中…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pager" id="recentPager">
+          <button id="recentPrev" class="btn-ghost" type="button">上一頁</button>
+          <span id="recentPgInfo" class="muted">—</span>
+          <button id="recentNext" class="btn-ghost" type="button">下一頁</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 月度統計（簡表） -->
+    <section class="row">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">本月薪資概覽</h3>
+          <div class="card-tools">
+            <a class="link" href="/modules/payroll_yearstats.php">前往年度統計</a>
+          </div>
+        </div>
+        <div class="grid-3">
+          <div>
+            <div class="muted">已計薪人數</div>
+            <div id="sumCalcCount" class="stat">—</div>
+          </div>
+          <div>
+            <div class="muted">本月總薪資</div>
+            <div id="sumPayroll" class="stat">—</div>
+          </div>
+          <div>
+            <div class="muted">已支付金額</div>
+            <div id="sumPaid" class="stat">—</div>
+          </div>
+        </div>
+      </div>
+    </section>
 
   </main>
 

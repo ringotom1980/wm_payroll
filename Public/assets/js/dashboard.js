@@ -45,6 +45,32 @@
     }
   }
 
+    // ---- 日期格式工具 ----
+  function fmtYmd(s) {
+    if (!s) return '—';
+    // 接受 'YYYY-MM-DD' 或 'YYYY/MM/DD' 或含時區的 ISO 字串
+    const t = typeof s === 'string' ? s.replace(/\//g, '-') : s;
+    const d = new Date(t);
+    if (isNaN(d.getTime())) {
+      // 如果是純 'YYYY-MM-DD' 當字串回傳
+      if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+      return '—';
+    }
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  }
+  function yearOnly(s) {
+    if (!s) return null;
+    const m = String(s).match(/^(\d{4})/);
+    return m ? m[1] : null;
+  }
+  function thisYearStr() {
+    return String(new Date().getFullYear());
+  }
+
+
   async function fetchWithTimeout(url, { timeout = 10000, ...opt } = {}) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(new Error('timeout')), timeout);
@@ -123,28 +149,50 @@
       const st = els[`${key}St`];
       if (st) st.textContent = '';
     }
-    function fillCard(key, data) {
-      const eff = els[`${key}Eff`];
-      const upd = els[`${key}Upd`];
-      const latest = (data && (data.latest_date || data.latest || data.effective_date)) || '—';
-      const updatedAt = (data && (data.updated_at || data.updated)) || '—';
+        function fillCard(key, data) {
+      const effEl = els[`${key}Eff`];
+      const updEl = els[`${key}Upd`];
 
-      if (eff) eff.textContent = latest;
-      if (upd) upd.textContent = updatedAt;
+      // 後端可能回傳不同鍵名，這裡做容錯
+      const effRaw = data?.effective_date ?? data?.latest_date ?? data?.latest ?? null;
+      const updRaw = data?.created_at ?? data?.updated_at ?? data?.updated ?? null;
 
-      // 若 latest_date 與上次不同且不為破折號，視為此 service 完成
-      if (latest && latest !== '—' && lastEff[key] !== null && lastEff[key] !== latest) {
+      // 生效日期邏輯：
+      // - li / lp：直接顯示 effective_date（若有），用 YYYY-MM-DD
+      // - nhi：若 effective_date 空，顯示「現在年度（YYYY）」；若有值且是完整日期，也只要年份
+      let effText = '—';
+      if (key === 'nhi') {
+        if (effRaw) {
+          // 有值也只顯示年份
+          effText = yearOnly(effRaw) || thisYearStr();
+        } else {
+          effText = thisYearStr();
+        }
+      } else {
+        effText = fmtYmd(effRaw);
+      }
+
+      // 資料庫更新日期：一律使用 created_at → YYYY-MM-DD
+      const updText = fmtYmd(updRaw);
+
+      if (effEl) effEl.textContent = effText;
+      if (updEl) updEl.textContent = updText;
+
+      // 狀態清除
+      clearCardStatus(key);
+
+      // 若要用「生效日變化」判定同步完成（保留你原本機制）
+      const latestKey = effText; // 這裡以顯示文字本身作為比較依據
+      if (latestKey && latestKey !== '—' && lastEff[key] !== null && lastEff[key] !== latestKey) {
         running[key] = false;
       }
-      // 初始化記錄（第一次讀到資料）
-      if (lastEff[key] === null && latest && latest !== '—') {
-        lastEff[key] = latest;
-      } else if (latest && latest !== '—') {
-        lastEff[key] = latest;
+      if (lastEff[key] === null && latestKey && latestKey !== '—') {
+        lastEff[key] = latestKey;
+      } else if (latestKey && latestKey !== '—') {
+        lastEff[key] = latestKey;
       }
-
-      clearCardStatus(key);
     }
+
 
     // ---- 狀態讀取 ----
     async function getStatusOne(key) {

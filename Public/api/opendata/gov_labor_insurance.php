@@ -9,29 +9,47 @@ $datasetId = 6258;
 $table     = 'gov_labor_insurance';
 $tmpTable  = 'gov_labor_insurance_tmp';
 
+$mode = $_GET['mode'] ?? 'sync';
+
 try {
     /** @var PDO $pdo */
     $pdo = require __DIR__ . '/../../../config/db.php';
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
+    if ($mode === 'status') {
+        $stmt = $pdo->query("SELECT COUNT(*) cnt, MAX(effective_date) latest_date, MAX(created_at) updated_at FROM `{$table}`");
+        $r = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        echo json_encode([
+            'ok' => true,
+            'cnt' => (int)($r['cnt'] ?? 0),
+            'latest_date' => $r['latest_date'] ?: null,
+            'updated_at'  => $r['updated_at'] ?: null,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    // ---- sync ----
     // 1) 取 metadata，撈出 CSV 連結（取第一筆 CSV 即可）
     $metaUrl = "https://data.gov.tw/api/v1/dataset/{$datasetId}";
-    $meta = json_decode(file_get_contents($metaUrl), true);
+    $ctx = stream_context_create([
+        'http' => ['timeout' => 15, 'header' => "Accept: application/json\r\nUser-Agent: wm-payroll/1.0\r\n"]
+    ]);
+    $meta = json_decode(@file_get_contents($metaUrl, false, $ctx), true);
     if (!$meta || empty($meta['resources'])) throw new Exception('讀取 metadata 失敗或無資源');
 
     $csvRes = null;
     foreach ($meta['resources'] as $r) {
         if (isset($r['format']) && strcasecmp($r['format'], 'CSV') === 0 && !empty($r['url'])) {
-            $csvRes = $r;
-            break;
+            $csvRes = $r; break;
         }
     }
     if (!$csvRes) throw new Exception('找不到 CSV 資源');
     $csvUrl = $csvRes['url'];
+    $updated = $csvRes['updated'] ?? null;
 
     // 2) 下載 CSV
-    $raw = file_get_contents($csvUrl);
-    if (!$raw) throw new Exception("下載失敗：$csvUrl");
+    $raw = @file_get_contents($csvUrl, false, stream_context_create(['http'=>['timeout'=>30,'header'=>"User-Agent: wm-payroll/1.0\r\n"]]));
+    if ($raw === false) throw new Exception("下載失敗：$csvUrl");
     $raw = mb_convert_encoding($raw, 'UTF-8', 'auto');
 
     // 3) 解析 CSV（以首列為標題動態對應）
@@ -45,7 +63,7 @@ try {
     // 建 header 索引（關鍵欄：等級、區間、投保薪資、日期）
     $idx = ['level' => -1, 'range' => -1, 'wage' => -1, 'date' => -1, 'note' => -1];
     foreach ($headers as $i => $h) {
-        $h = trim($h);
+        $h = trim((string)$h);
         if ($idx['level'] < 0 && (mb_strpos($h, '等級') !== false || mb_strpos($h, '級別') !== false)) $idx['level'] = $i;
         if ($idx['range'] < 0 && (mb_strpos($h, '區間') !== false || mb_strpos($h, '級距') !== false)) $idx['range'] = $i;
         if ($idx['wage']  < 0 && (mb_strpos($h, '投保薪資') !== false || mb_strpos($h, '月投保金額') !== false)) $idx['wage']  = $i;
@@ -56,12 +74,10 @@ try {
         throw new Exception('CSV 欄位無法對應（需要：區間/級距、投保薪資）');
     }
 
-    $pdo->exec("TRUNCATE TABLE `$tmpTable`");
+    $pdo->exec("TRUNCATE TABLE `{$tmpTable}`");
     $ins = $pdo->prepare("
-        INSERT INTO `$tmpTable`
-        (level_no, wage_min, wage_max, base_amount, category, effective_date)
-        VALUES
-        (:lv, :min, :max, :base, :cat, :eff)
+        INSERT INTO `{$tmpTable}` (level_no, wage_min, wage_max, base_amount, category, effective_date)
+        VALUES (:lv, :min, :max, :base, :cat, :eff)
     ");
 
     $n = 0;
@@ -77,11 +93,9 @@ try {
         // 區間解析
         $from = null; $to = null;
         if (preg_match('/(\d+)\s*[~至-]\s*(\d+)/u', $range, $m)) {
-            $from = (float)$m[1];
-            $to   = (float)$m[2];
+            $from = (float)$m[1]; $to = (float)$m[2];
         } elseif (preg_match('/(\d+)\s*元\s*以上/u', $range, $m)) {
-            $from = (float)$m[1];
-            $to   = null;
+            $from = (float)$m[1]; $to = null;
         } else {
             $v = preg_replace('/[^\d]/', '', $range);
             $from = $to = $v !== '' ? (float)$v : null;
@@ -92,9 +106,13 @@ try {
 
         // 生效日期（可能是民國年 112/01）
         $eff = null;
-        if (preg_match('/^(\d{3,4})[\/\-\.](\d{1,2})/u', $date, $mm)) {
-            $yy = (int)$mm[1];
-            $mn = (int)$mm[2];
+        if ($updated) {
+            $u = substr($updated, 0, 10);
+            if (preg_match('/^(\d{4})-(\d{2})-\d{2}$/', $u, $mm)) {
+                $eff = sprintf('%s-%s-01', $mm[1], $mm[2]);
+            }
+        } elseif (preg_match('/^(\d{3,4})[\/\-\.](\d{1,2})/u', $date, $mm)) {
+            $yy = (int)$mm[1]; $mn = (int)$mm[2];
             if ($yy < 1911) $yy += 1911;
             $eff = sprintf('%04d-%02d-01', $yy, $mn);
         }
@@ -112,16 +130,15 @@ try {
     fclose($fh);
 
     $pdo->beginTransaction();
-    $pdo->exec("TRUNCATE TABLE `$table`");
-    // tmp 與正式表欄位一致，用 SELECT 指定欄位搬運（避免 * 誤差）
+    $pdo->exec("TRUNCATE TABLE `{$table}`");
     $pdo->exec("
-        INSERT INTO `$table` (level_no, wage_min, wage_max, base_amount, category, effective_date)
+        INSERT INTO `{$table}` (level_no, wage_min, wage_max, base_amount, category, effective_date)
         SELECT level_no, wage_min, wage_max, base_amount, category, effective_date
-        FROM `$tmpTable`
+        FROM `{$tmpTable}`
     ");
     $pdo->commit();
 
-    echo json_encode(['ok' => true, 'count' => $n, 'source' => $csvUrl], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => true, 'count' => $n, 'source' => $csvUrl, 'updated' => $updated], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     if (!empty($pdo) && $pdo->inTransaction()) $pdo->rollBack();
     http_response_code(500);

@@ -3,7 +3,8 @@
 // 注意：依你的要求「不修改結構，只增連結」
 
 $current = basename($_SERVER['PHP_SELF']); // 目前頁面的檔名
-function active($file) {
+function active($file)
+{
   global $current;
   return $current === $file ? 'active' : '';
 }
@@ -14,6 +15,8 @@ function active($file) {
 
     <li class="menu-section">人員資料</li>
     <li><a href="/modules/employees.php" class="menu-link <?= active('employees.php') ?>"><i class="iconoir-group"></i> 員工主檔</a></li>
+    <li><a href="/modules/leave_records.php" class="menu-link <?= active('leave_records.php') ?>"><i class="iconoir-calendar-minus"></i> 休假管理</a></li>
+
 
     <li class="menu-section">薪資設定</li>
     <li><a href="/modules/salary_master.php" class="menu-link <?= active('salary_master.php') ?>"><i class="iconoir-money-square"></i> 薪資主檔</a></li>

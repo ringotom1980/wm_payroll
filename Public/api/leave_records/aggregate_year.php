@@ -4,15 +4,23 @@ header('Content-Type: application/json; charset=utf-8');
 
 $pdo  = require __DIR__ . '/../../../config/db.php';
 $year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
-$monthForNote = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('n'); // 供回傳當前月備註
-
+$monthForNote = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('n');
 if ($year < 1900 || $year > 2100 || $monthForNote < 1 || $monthForNote > 12) {
   http_response_code(400); echo json_encode(['error'=>'Invalid params']); exit;
 }
 
-/** 優先讀快照，否則用簡化後備算法（HIRE_DATE 基準，四捨五入到 0.5） */
+/** 快速偵測欄位是否存在（結果快取） */
+function hasColumn(PDO $pdo, string $table, string $col): bool {
+  static $cache = [];
+  $key = $table . '|' . $col;
+  if (isset($cache[$key])) return $cache[$key];
+  $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+  $stmt->execute([$table, $col]);
+  return $cache[$key] = ((int)$stmt->fetchColumn() > 0);
+}
+
+/** 年度額度：先讀快照；沒有就用簡化算法（HIRE_DATE 基準，四捨五入到 0.5） */
 function annual_quota(PDO $pdo, int $empId, int $year): float {
-  // 1) 快照
   try {
     $q = $pdo->prepare("SELECT annual_quota_days FROM leave_annual_quota WHERE emp_id=? AND year=? LIMIT 1");
     $q->execute([$empId, $year]);
@@ -20,20 +28,18 @@ function annual_quota(PDO $pdo, int $empId, int $year): float {
     if ($v !== false) return (float)$v;
   } catch (Throwable $e) {}
 
-  // 2) 後備（粗略版）：以該年年底計年資
-  $h = $pdo->prepare("SELECT hire_date FROM employees WHERE emp_id=?");
-  $h->execute([$empId]);
-  $hire = $h->fetchColumn();
+  $stmt = $pdo->prepare("SELECT hire_date FROM employees WHERE emp_id=? AND (is_deleted IS NULL OR is_deleted=0)");
+  $stmt->execute([$empId]);
+  $hire = $stmt->fetchColumn();
   if (!$hire) return 0.0;
 
   $hireDt = new DateTime($hire);
   $yEnd   = new DateTime(sprintf('%04d-12-31', $year));
   if ($yEnd < $hireDt) return 0.0;
 
-  $diff = $hireDt->diff($yEnd);
-  $years = $diff->y + $diff->m / 12.0;
-
-  $days = 0.0;
+  $diff  = $hireDt->diff($yEnd);
+  $years = $diff->y + $diff->m/12.0;
+  $days  = 0.0;
   if     ($years >= 0.5 && $years < 1)  $days = 3.0;
   elseif ($years >= 1   && $years < 2)  $days = 7.0;
   elseif ($years >= 2   && $years < 3)  $days = 10.0;
@@ -44,25 +50,36 @@ function annual_quota(PDO $pdo, int $empId, int $year): float {
 }
 
 try {
-  // 取所有員工（依你系統實際欄位調整 emp_name/姓名欄位）
-  $emps = $pdo->query("SELECT emp_id, emp_name, hire_date, parental_leave_start, parental_leave_end FROM employees ORDER BY emp_id")->fetchAll();
+  // 名稱欄位用 full_name；只撈在職且未刪除
+  $hasPLS = hasColumn($pdo, 'employees', 'parental_leave_start');
+  $hasPLE = hasColumn($pdo, 'employees', 'parental_leave_end');
+  $plCols = [];
+  if ($hasPLS) $plCols[] = 'parental_leave_start';
+  if ($hasPLE) $plCols[] = 'parental_leave_end';
+  $plSelect = $plCols ? (', ' . implode(', ', $plCols)) : '';
+
+  $sqlEmp = "SELECT emp_id, full_name AS emp_name, hire_date{$plSelect}
+             FROM employees
+             WHERE status='ACTIVE' AND (is_deleted IS NULL OR is_deleted=0)
+             ORDER BY emp_id";
+  $emps = $pdo->query($sqlEmp)->fetchAll();
 
   $start = sprintf('%04d-01-01', $year);
   $end   = sprintf('%04d-12-31', $year);
 
-  // 當年全部請假（一次撈）
-  $stmt = $pdo->prepare("SELECT emp_id, leave_code, date, slot FROM leave_records WHERE `date` BETWEEN ? AND ?");
+  // 當年全部請假
+  $stmt = $pdo->prepare("SELECT emp_id, leave_code FROM leave_records WHERE `date` BETWEEN ? AND ?");
   $stmt->execute([$start, $end]);
   $rows = $stmt->fetchAll();
 
-  $sum = []; // emp_id => code => days
+  $sum = [];
   foreach ($rows as $r) {
     $eid = (int)$r['emp_id'];
     $code = $r['leave_code'];
-    $sum[$eid][$code] = ($sum[$eid][$code] ?? 0) + 0.5; // AM/PM 各 0.5
+    $sum[$eid][$code] = ($sum[$eid][$code] ?? 0) + 0.5;
   }
 
-  // 當前月備註（依指定 monthForNote）
+  // 指定月份的月備註
   $stmtMN = $pdo->prepare("SELECT emp_id, note FROM leave_month_notes WHERE year=? AND month=?");
   $stmtMN->execute([$year, $monthForNote]);
   $notesByEmp = [];
@@ -72,14 +89,18 @@ try {
 
   $items = [];
   foreach ($emps as $e) {
-    $eid = (int)$e['emp_id'];
+    $eid   = (int)$e['emp_id'];
+    $name  = $e['emp_name'] ?? ('E'.$eid);
     $quota = annual_quota($pdo, $eid, $year);
     $used  = (float)($sum[$eid]['ANNUAL'] ?? 0.0);
     $left  = max(0.0, $quota - $used);
 
+    $plStart = $hasPLS ? ($e['parental_leave_start'] ?? null) : null;
+    $plEnd   = $hasPLE ? ($e['parental_leave_end'] ?? null)   : null;
+
     $items[] = [
       'emp_id' => $eid,
-      'name'   => $e['emp_name'] ?? ('E'.$eid),
+      'name'   => $name,
       'annual_quota' => $quota,
       'annual_used'  => $used,
       'annual_left'  => $left,
@@ -95,10 +116,7 @@ try {
         'MENSTRUAL' => (float)($sum[$eid]['MENSTRUAL'] ?? 0.0),
         'PARENTAL_LEAVE' => (float)($sum[$eid]['PARENTAL_LEAVE'] ?? 0.0),
       ],
-      'parental_leave_period' => [
-        'start' => $e['parental_leave_start'],
-        'end'   => $e['parental_leave_end'],
-      ],
+      'parental_leave_period' => ['start' => $plStart, 'end' => $plEnd],
       'month_note' => $notesByEmp[$eid] ?? null
     ];
   }

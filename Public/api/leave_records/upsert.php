@@ -16,23 +16,38 @@ if ($empId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !in_array($slo
   http_response_code(400); echo json_encode(['error'=>'Invalid params']); exit;
 }
 
-// 育嬰留停期間鎖定（該期間不可編輯任何假別）
-$pl = $pdo->prepare("SELECT parental_leave_start, parental_leave_end FROM employees WHERE emp_id=?");
-$pl->execute([$empId]);
-$pls = $pl->fetch();
-if ($pls && $pls['parental_leave_start'] && $pls['parental_leave_end']) {
-  if ($date >= $pls['parental_leave_start'] && $date <= $pls['parental_leave_end']) {
+function hasColumn(PDO $pdo, string $table, string $col): bool {
+  static $cache = [];
+  $key = $table . '|' . $col;
+  if (isset($cache[$key])) return $cache[$key];
+  $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+  $stmt->execute([$table, $col]);
+  return $cache[$key] = ((int)$stmt->fetchColumn() > 0);
+}
+
+// 若有育嬰欄位才做期間鎖定
+$hasPLS = hasColumn($pdo, 'employees', 'parental_leave_start');
+$hasPLE = hasColumn($pdo, 'employees', 'parental_leave_end');
+if ($hasPLS || $hasPLE) {
+  $sel = [];
+  if ($hasPLS) $sel[] = 'parental_leave_start';
+  if ($hasPLE) $sel[] = 'parental_leave_end';
+  $sql = "SELECT " . implode(',', $sel) . " FROM employees WHERE emp_id=? LIMIT 1";
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute([$empId]);
+  $row = $stmt->fetch();
+  $pls = $hasPLS ? ($row['parental_leave_start'] ?? null) : null;
+  $ple = $hasPLE ? ($row['parental_leave_end'] ?? null)   : null;
+  if ($pls && $ple && $date >= $pls && $date <= $ple) {
     http_response_code(400);
-    echo json_encode(['error'=>'IN_PARENTAL_LEAVE_RANGE','message'=>'該員育嬰留停中，僅可編輯非育嬰留停欄位（此期間鎖定不可編）']);
+    echo json_encode(['error'=>'IN_PARENTAL_LEAVE_RANGE','message'=>'該員育嬰留停中，僅可編輯非育嬰留停欄位（此期間鎖定不可編）'], JSON_UNESCAPED_UNICODE);
     exit;
   }
 }
 
-// 特休餘額檢核（新增/覆寫成 ANNUAL 時，不得使年度剩餘 < 0）
+// 特休餘額檢核（ANNUAL 不可使剩餘 < 0）
 if ($code === 'ANNUAL') {
   $year = (int)substr($date, 0, 4);
-
-  // 讀年度額度（快照優先，否則後備算法）
   $quota = 0.0;
   try {
     $q = $pdo->prepare("SELECT annual_quota_days FROM leave_annual_quota WHERE emp_id=? AND year=? LIMIT 1");
@@ -59,12 +74,10 @@ if ($code === 'ANNUAL') {
     }
   }
 
-  // 已用特休
   $stmtUsed = $pdo->prepare("SELECT SUM(0.5) FROM leave_records WHERE emp_id=? AND YEAR(`date`)=? AND leave_code='ANNUAL'");
   $stmtUsed->execute([$empId, $year]);
   $used = (float)($stmtUsed->fetchColumn() ?: 0.0);
 
-  // 當前 slot 原狀態（若本來就是 ANNUAL → 不增加；否則 +0.5）
   $stmtCur = $pdo->prepare("SELECT leave_code FROM leave_records WHERE emp_id=? AND `date`=? AND slot=?");
   $stmtCur->execute([$empId, $date, $slot]);
   $orig = $stmtCur->fetchColumn();
@@ -81,13 +94,11 @@ if ($code === 'ANNUAL') {
 }
 
 try {
-  // upsert：若已存在該 (emp_id, date, slot) → 覆寫 leave_code/note；否則新增
   $sql = "INSERT INTO leave_records (emp_id, `date`, slot, leave_code, note, source, created_by, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, 'MANUAL', NULL, NOW(), NOW())
           ON DUPLICATE KEY UPDATE leave_code=VALUES(leave_code), note=VALUES(note), updated_at=NOW()";
   $stmt = $pdo->prepare($sql);
   $stmt->execute([$empId, $date, $slot, $code, $note]);
-
   echo json_encode(['ok'=>true], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
   http_response_code(500);

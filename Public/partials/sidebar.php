@@ -15,7 +15,7 @@ function active($file)
 
     <li class="menu-section">人員資料</li>
     <li><a href="/modules/employees.php" class="menu-link <?= active('employees.php') ?>"><i class="iconoir-group"></i> 員工主檔</a></li>
-    <li><a href="/modules/leave_records.php" class="menu-link <?= active('leave_records.php') ?>"><i class="iconoir-calendar-minus"></i> 休假管理</a></li>
+    <li><a href="/modules/company_calendar.php" class="menu-link <?= active('company_calendar.php') ?>"><i class="iconoir-calendar-minus"></i> 休假管理</a></li>
 
 
     <li class="menu-section">薪資設定</li>

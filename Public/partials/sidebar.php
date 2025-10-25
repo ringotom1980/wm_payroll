@@ -17,7 +17,6 @@ function active($file)
     <li><a href="/modules/employees.php" class="menu-link <?= active('employees.php') ?>"><i class="iconoir-group"></i> 員工主檔</a></li>
     <li><a href="/modules/company_calendar.php" class="menu-link <?= active('company_calendar.php') ?>"><i class="iconoir-calendar-minus"></i> 休假管理</a></li>
 
-
     <li class="menu-section">薪資設定</li>
     <li><a href="/modules/salary_master.php" class="menu-link <?= active('salary_master.php') ?>"><i class="iconoir-money-square"></i> 薪資主檔</a></li>
     <li><a href="/modules/payroll_periods.php" class="menu-link <?= active('payroll_periods.php') ?>"><i class="iconoir-calendar"></i> 薪資期別</a></li>

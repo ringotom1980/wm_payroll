@@ -9,34 +9,22 @@ if ($year < 1900 || $year > 2100 || $monthForNote < 1 || $monthForNote > 12) {
   http_response_code(400); echo json_encode(['error'=>'Invalid params']); exit;
 }
 
-/** 快速偵測欄位是否存在（結果快取） */
-function hasColumn(PDO $pdo, string $table, string $col): bool {
-  static $cache = [];
-  $key = $table . '|' . $col;
-  if (isset($cache[$key])) return $cache[$key];
-  $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
-  $stmt->execute([$table, $col]);
-  return $cache[$key] = ((int)$stmt->fetchColumn() > 0);
-}
-
-/** 年度額度：先讀快照；沒有就用簡化算法（HIRE_DATE 基準，四捨五入到 0.5） */
 function annual_quota(PDO $pdo, int $empId, int $year): float {
+  // 先讀快照
   try {
     $q = $pdo->prepare("SELECT annual_quota_days FROM leave_annual_quota WHERE emp_id=? AND year=? LIMIT 1");
     $q->execute([$empId, $year]);
     $v = $q->fetchColumn();
     if ($v !== false) return (float)$v;
   } catch (Throwable $e) {}
-
+  // 後備算法（HIRE_DATE 基準）
   $stmt = $pdo->prepare("SELECT hire_date FROM employees WHERE emp_id=? AND (is_deleted IS NULL OR is_deleted=0)");
   $stmt->execute([$empId]);
   $hire = $stmt->fetchColumn();
   if (!$hire) return 0.0;
-
   $hireDt = new DateTime($hire);
   $yEnd   = new DateTime(sprintf('%04d-12-31', $year));
   if ($yEnd < $hireDt) return 0.0;
-
   $diff  = $hireDt->diff($yEnd);
   $years = $diff->y + $diff->m/12.0;
   $days  = 0.0;
@@ -50,24 +38,16 @@ function annual_quota(PDO $pdo, int $empId, int $year): float {
 }
 
 try {
-  // 名稱欄位用 full_name；只撈在職且未刪除
-  $hasPLS = hasColumn($pdo, 'employees', 'parental_leave_start');
-  $hasPLE = hasColumn($pdo, 'employees', 'parental_leave_end');
-  $plCols = [];
-  if ($hasPLS) $plCols[] = 'parental_leave_start';
-  if ($hasPLE) $plCols[] = 'parental_leave_end';
-  $plSelect = $plCols ? (', ' . implode(', ', $plCols)) : '';
-
-  $sqlEmp = "SELECT emp_id, full_name AS emp_name, hire_date{$plSelect}
+  // 使用 full_name、parental_leave_start、expected_return_date(=end)
+  $sqlEmp = "SELECT emp_id, full_name AS emp_name, hire_date, status, parental_leave_start, expected_return_date
              FROM employees
-             WHERE status='ACTIVE' AND (is_deleted IS NULL OR is_deleted=0)
+             WHERE (is_deleted IS NULL OR is_deleted=0)
              ORDER BY emp_id";
   $emps = $pdo->query($sqlEmp)->fetchAll();
 
   $start = sprintf('%04d-01-01', $year);
   $end   = sprintf('%04d-12-31', $year);
 
-  // 當年全部請假
   $stmt = $pdo->prepare("SELECT emp_id, leave_code FROM leave_records WHERE `date` BETWEEN ? AND ?");
   $stmt->execute([$start, $end]);
   $rows = $stmt->fetchAll();
@@ -79,7 +59,6 @@ try {
     $sum[$eid][$code] = ($sum[$eid][$code] ?? 0) + 0.5;
   }
 
-  // 指定月份的月備註
   $stmtMN = $pdo->prepare("SELECT emp_id, note FROM leave_month_notes WHERE year=? AND month=?");
   $stmtMN->execute([$year, $monthForNote]);
   $notesByEmp = [];
@@ -95,8 +74,15 @@ try {
     $used  = (float)($sum[$eid]['ANNUAL'] ?? 0.0);
     $left  = max(0.0, $quota - $used);
 
-    $plStart = $hasPLS ? ($e['parental_leave_start'] ?? null) : null;
-    $plEnd   = $hasPLE ? ($e['parental_leave_end'] ?? null)   : null;
+    $pls = $e['parental_leave_start'] ?? null;
+    $ple = $e['expected_return_date'] ?? null;
+
+    $label = null;
+    if ($pls && $ple) {
+      $label = $pls . ' ～ ' . $ple . '（預計）';
+    } elseif ($ple) {
+      $label = '～ ' . $ple . '（預計）';
+    }
 
     $items[] = [
       'emp_id' => $eid,
@@ -116,7 +102,7 @@ try {
         'MENSTRUAL' => (float)($sum[$eid]['MENSTRUAL'] ?? 0.0),
         'PARENTAL_LEAVE' => (float)($sum[$eid]['PARENTAL_LEAVE'] ?? 0.0),
       ],
-      'parental_leave_period' => ['start' => $plStart, 'end' => $plEnd],
+      'parental_leave_period' => ['start'=>$pls, 'end'=>$ple, 'label'=>$label],
       'month_note' => $notesByEmp[$eid] ?? null
     ];
   }

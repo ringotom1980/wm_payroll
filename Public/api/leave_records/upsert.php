@@ -16,33 +16,27 @@ if ($empId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !in_array($slo
   http_response_code(400); echo json_encode(['error'=>'Invalid params']); exit;
 }
 
-function hasColumn(PDO $pdo, string $table, string $col): bool {
-  static $cache = [];
-  $key = $table . '|' . $col;
-  if (isset($cache[$key])) return $cache[$key];
-  $stmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
-  $stmt->execute([$table, $col]);
-  return $cache[$key] = ((int)$stmt->fetchColumn() > 0);
-}
+/** 鎖定：若同時有 start/end → 鎖 start~end；若僅有 end → 鎖 <= end **/
+$empStmt = $pdo->prepare("SELECT parental_leave_start, expected_return_date FROM employees WHERE emp_id=? LIMIT 1");
+$empStmt->execute([$empId]);
+$emp = $empStmt->fetch();
+$pls = $emp['parental_leave_start'] ?? null;
+$ple = $emp['expected_return_date'] ?? null;
 
-// 若有育嬰欄位才做期間鎖定
-$hasPLS = hasColumn($pdo, 'employees', 'parental_leave_start');
-$hasPLE = hasColumn($pdo, 'employees', 'parental_leave_end');
-if ($hasPLS || $hasPLE) {
-  $sel = [];
-  if ($hasPLS) $sel[] = 'parental_leave_start';
-  if ($hasPLE) $sel[] = 'parental_leave_end';
-  $sql = "SELECT " . implode(',', $sel) . " FROM employees WHERE emp_id=? LIMIT 1";
-  $stmt = $pdo->prepare($sql);
-  $stmt->execute([$empId]);
-  $row = $stmt->fetch();
-  $pls = $hasPLS ? ($row['parental_leave_start'] ?? null) : null;
-  $ple = $hasPLE ? ($row['parental_leave_end'] ?? null)   : null;
-  if ($pls && $ple && $date >= $pls && $date <= $ple) {
-    http_response_code(400);
-    echo json_encode(['error'=>'IN_PARENTAL_LEAVE_RANGE','message'=>'該員育嬰留停中，僅可編輯非育嬰留停欄位（此期間鎖定不可編）'], JSON_UNESCAPED_UNICODE);
-    exit;
-  }
+$inLock = false;
+if ($pls && $ple) {
+  $inLock = ($date >= $pls && $date <= $ple);
+} elseif ($ple) {
+  $inLock = ($date <= $ple);
+}
+if ($inLock) {
+  http_response_code(400);
+  echo json_encode([
+    'error'=>'IN_PARENTAL_LEAVE_RANGE',
+    'message'=> ($pls ? "該員育嬰留停中（{$pls}～{$ple}，預計），僅可編輯非育嬰留停欄位"
+                     : "該員育嬰留停中（～{$ple}，預計），僅可編輯非育嬰留停欄位")
+  ], JSON_UNESCAPED_UNICODE);
+  exit;
 }
 
 // 特休餘額檢核（ANNUAL 不可使剩餘 < 0）
@@ -73,7 +67,6 @@ if ($code === 'ANNUAL') {
       $quota = round($quota * 2) / 2.0;
     }
   }
-
   $stmtUsed = $pdo->prepare("SELECT SUM(0.5) FROM leave_records WHERE emp_id=? AND YEAR(`date`)=? AND leave_code='ANNUAL'");
   $stmtUsed->execute([$empId, $year]);
   $used = (float)($stmtUsed->fetchColumn() ?: 0.0);

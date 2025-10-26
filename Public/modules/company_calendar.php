@@ -51,7 +51,7 @@ require __DIR__ . '/../partials/header.php'; // ✅ 與 employees.php 一致：�
                     <div class="cc-right">
                         <label class="cc-file">
                             <input id="ccCsvFile" type="file" accept=".csv" />
-                            <span class="btn secondary">匯入政府 CSV</span>
+                            <span class="btn secondary">匯入政府行事曆</span>
                         </label>
                         <span id="ccCsvName" class="cc-filename">未選擇檔案</span>
                         <button id="btnImportCsv" class="btn primary">開始匯入</button>

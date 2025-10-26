@@ -38,12 +38,33 @@
   display: inline-flex;
   align-items: center;
 }
-.cc-file input[type="file"] {
+/* 讓檔案欄位可被點到又不佔位（不要用 display:none 以免某些瀏覽器 label 失效） */
+.cc-file input[type="file"]{
   position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  overflow: hidden;
 }
+
+/* 檔名顯示樣式 */
+.cc-filename{
+  margin-left: 10px;
+  font-size: 13px;
+  color: #6b7280;
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.cc-filename.has-file{
+  color: #111827;
+}
+
 .btn {
   height: 36px;
   padding: 0 12px;

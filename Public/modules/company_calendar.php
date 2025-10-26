@@ -4,8 +4,8 @@ require __DIR__ . '/../partials/header.php'; // ✅ 與 employees.php 一致：�
 ?>
 
 <!-- 頁面專用樣式（外掛） -->
-<link href="/assets/css/company_calendar.css?v=3" rel="stylesheet">
-<link href="/assets/css/leave_records.css?v=3" rel="stylesheet">
+<link href="/assets/css/company_calendar.css?v=4" rel="stylesheet">
+<link href="/assets/css/leave_records.css?v=4" rel="stylesheet">
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 
@@ -21,11 +21,9 @@ require __DIR__ . '/../partials/header.php'; // ✅ 與 employees.php 一致：�
                 <div class="cc-toolbar">
                     <div class="cc-left">
                         <label class="cc-year">
-                            <span>年度</span>
                             <select id="ccYear"></select>
                         </label>
                         <label class="cc-month">
-                            <span>月份</span>
                             <select id="ccMonth">
                                 <option value="1">1 月</option>
                                 <option value="2">2 月</option>
@@ -49,8 +47,10 @@ require __DIR__ . '/../partials/header.php'; // ✅ 與 employees.php 一致：�
                             <input id="ccCsvFile" type="file" accept=".csv" />
                             <span class="btn secondary">匯入政府 CSV</span>
                         </label>
+                        <span id="ccCsvName" class="cc-filename">未選擇檔案</span>
                         <button id="btnImportCsv" class="btn primary">開始匯入</button>
                     </div>
+
                 </div>
 
                 <!-- 月份橫向日列 -->
@@ -113,8 +113,8 @@ require __DIR__ . '/../partials/header.php'; // ✅ 與 employees.php 一致：�
     <?php require __DIR__ . '/../partials/footer.php'; ?>
 
     <!-- 頁面腳本（與 employees.php 一樣使用 defer） -->
-    <script src="/assets/js/company_calendar.js?v=1" defer></script>
-    <script src="/assets/js/leave_records.js?v=1" defer></script>
+    <script src="/assets/js/company_calendar.js?v=2" defer></script>
+    <script src="/assets/js/leave_records.js?v=2" defer></script>
 </body>
 
 </html>

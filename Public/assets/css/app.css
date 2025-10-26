@@ -1,4 +1,8 @@
 @import url(https://cdn.jsdelivr.net/gh/iconoir-icons/iconoir@7.7.0/css/iconoir.css);
+
+/* =========================
+   全站變數
+========================= */
 :root {
   --brand: #0ea5e9;
   --brand-600: #0284c7;
@@ -9,12 +13,21 @@
   --line: #e5e7eb;
   --thead: #f8fafc;
   --header: #1f2937;
+
+  /* 版型關鍵尺寸（依實際調整） */
+  --wm-sidebar-w: 210px;
+  --wm-header-h: 60px; /* ← 若你的 header 不是 60px，改這裡 */
+  --page-toolbar-h: 0px; /* 預設沒有額外工具列；有需要的頁面可覆寫 */
 }
+
+/* =========================
+   Reset / Base
+========================= */
 * {
   box-sizing: border-box;
 }
-body,
-html {
+html,
+body {
   height: 100%;
 }
 body {
@@ -24,7 +37,20 @@ body {
   font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     Helvetica, Arial, "Noto Sans", "PingFang TC", "Microsoft JhengHei",
     sans-serif;
+
+  /* 讓出 fixed header 的高度 */
+  padding-top: var(--wm-header-h);
 }
+
+a {
+  color: var(--brand);
+  text-decoration: none;
+  transition: color 0.3s;
+}
+a:hover {
+  color: var(--brand-600);
+}
+
 .btn,
 button,
 input,
@@ -34,24 +60,27 @@ textarea {
   font-size: inherit;
   line-height: inherit;
 }
-a {
-  color: var(--brand);
-  text-decoration: none;
-  transition: color 0.3s;
-}
-a:hover {
-  text-decoration: none;
-  color: var(--brand-600);
-}
+
+/* =========================
+   Header（固定最上層）
+========================= */
 .main-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--wm-header-h);
+  z-index: 2000;
   display: flex;
   align-items: center;
   justify-content: space-between;
+
   padding: 10px 20px;
   background: var(--header);
   color: #fff;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
+
 .header-left {
   display: flex;
   align-items: center;
@@ -62,7 +91,6 @@ a:hover {
   align-items: center;
   gap: 8px;
   color: inherit;
-  text-decoration: none;
   transition: color 0.4s;
 }
 .brand:hover {
@@ -85,13 +113,11 @@ a:hover {
 }
 .top-nav .nav-link {
   color: #fff;
-  text-decoration: none;
   font-size: 15px;
   transition: color 0.4s;
 }
 .top-nav .nav-link:hover {
   color: var(--brand);
-  text-decoration: none;
 }
 .logout-link {
   color: #f87171;
@@ -105,17 +131,26 @@ a:hover {
   vertical-align: middle;
   margin-right: 6px;
   color: inherit;
-  transition: color 0.4s;
 }
+
+/* =========================
+   Sidebar（固定左側，避開 header）
+========================= */
 .sidebar {
-  width: 210px;
-  float: left;
+  position: fixed;
+  left: 0;
+  top: var(--wm-header-h);
+  width: var(--wm-sidebar-w);
+  height: calc(100vh - var(--wm-header-h));
   background: #f9fafb;
   border-right: 1px solid var(--line);
-  min-height: calc(100vh - 60px);
   padding: 16px 0;
   text-align: center;
+  overflow-y: auto;
+  z-index: 1200; /* 低於 header，高於內容 */
 }
+
+/* Menu */
 .menu {
   list-style: none;
   margin: 0;
@@ -133,19 +168,26 @@ a:hover {
   border-bottom: 1px solid #e0e7ef;
   background: #f3f4f6;
 }
+.menu-section:first-of-type {
+  border-top: none;
+}
+.menu-section:not(:first-of-type) {
+  margin-top: 24px;
+}
+
 .menu-link {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 10px 16px;
+  margin: 2px 10px;
   color: var(--ink);
   text-decoration: none;
   border-left: 3px solid transparent;
   transition: 0.25s;
   font-weight: 500;
   border-radius: 6px;
-  margin: 2px 10px;
 }
 .menu-link i[class^="iconoir-"] {
   font-size: 18px;
@@ -156,7 +198,6 @@ a:hover {
   background: #e8f2fb;
   color: var(--brand);
   border-left-color: var(--brand);
-  text-decoration: none;
 }
 .menu-link:hover i[class^="iconoir-"] {
   color: var(--brand);
@@ -170,19 +211,33 @@ a:hover {
 .menu-link.active i[class^="iconoir-"] {
   color: var(--brand-600);
 }
-.menu-section:first-of-type {
-  border-top: none;
-}
-.menu-section:not(:first-of-type) {
-  margin-top: 24px;
-}
-.container {
-  margin-left: 210px;
+
+/* =========================
+   內容區（讓位給 sidebar）
+========================= */
+.content,
+.container,
+main {
+  margin-left: var(--wm-sidebar-w);
   padding: 16px;
 }
+
+/* RWD：小螢幕通常側欄會改抽屜覆蓋 → 內容回復全寬 */
+@media (max-width: 1023px) {
+  .content,
+  .container,
+  main {
+    margin-left: 0;
+  }
+}
+
+/* =========================
+   卡片、表格、KPI
+========================= */
 .row {
   margin-bottom: 16px;
 }
+
 .card {
   background: var(--card);
   border: 1px solid var(--line);
@@ -209,6 +264,7 @@ a:hover {
   align-items: center;
   gap: 8px;
 }
+
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -219,13 +275,11 @@ a:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-
 @media (max-width: 640px) {
   .kpi-grid {
     grid-template-columns: 1fr;
   }
 }
-
 .kpi {
   padding: 14px 16px;
 }
@@ -243,6 +297,7 @@ a:hover {
   font-size: 12px;
   color: var(--muted);
 }
+
 .table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -256,7 +311,12 @@ a:hover {
   border-radius: 12px;
   overflow: hidden;
 }
+
+/* Sticky thead：自動避開 fixed header +（可選）頁面工具列 */
 .table thead th {
+  position: sticky;
+  top: calc(var(--wm-header-h) + var(--page-toolbar-h));
+  z-index: 1;
   background: var(--thead);
   color: #334155;
   font-weight: 700;
@@ -273,6 +333,7 @@ a:hover {
 .table tbody tr:hover {
   background: #f9fafb;
 }
+
 .pager {
   display: flex;
   align-items: center;
@@ -280,7 +341,10 @@ a:hover {
   justify-content: flex-end;
   margin-top: 12px;
 }
-/* === 全站統一按鈕樣式（優化字重與平滑度） === */
+
+/* =========================
+   按鈕
+========================= */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -292,45 +356,33 @@ a:hover {
   background: #f8fafc;
   color: #1f2937;
   font-weight: 500;
-  font-family: inherit;
   font-size: 14px;
   line-height: 1.4;
   cursor: pointer;
   transition: filter 0.2s, transform 0.02s, background 0.2s;
-
-  /* 讓字體變細緻 */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-
 .btn:hover {
   filter: brightness(1.05);
 }
-
 .btn:active {
   transform: translateY(1px);
 }
-
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-
-/* 主按鈕 */
 .btn.primary {
   background: #0ea5e9;
   border-color: #0284c7;
   color: #fff;
 }
-
-/* 次要按鈕（白底） */
 .btn.secondary {
   background: #fff;
   border-color: #cbd5e1;
   color: #1f2937;
 }
-
-/* 透明邊框按鈕 */
 .btn.ghost {
   background: transparent;
   border: 1px solid #cbd5e1;
@@ -339,22 +391,17 @@ a:hover {
 .btn.ghost:hover {
   background: #f8fafc;
 }
-
-/* 危險按鈕（刪除） */
 .btn.danger {
   background: #fde2e2;
   border-color: #f8b4b4;
   color: #9f1239;
-  font-weight: 500; /* 保留刪除按鈕為粗體 */
+  font-weight: 500;
 }
-
-/* 小尺寸按鈕 */
 .btn.small {
   padding: 4px 8px;
   font-size: 12px;
   border-radius: 6px;
 }
-
 button {
   font-weight: 500;
   font-family: inherit;
@@ -374,6 +421,9 @@ button {
   filter: brightness(1.02);
 }
 
+/* =========================
+   其他
+========================= */
 .link {
   color: var(--brand);
   font-weight: 600;
@@ -381,10 +431,9 @@ button {
 }
 .link:hover {
   color: var(--brand-600);
-  text-decoration: none;
 }
+
 .main-footer {
-  clear: both;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -393,10 +442,9 @@ button {
   background: #f9fafb;
   font-size: 13px;
   color: var(--muted);
+  /* 不再需要 clear:both */
 }
-main {
-  padding: 16px;
-}
+
 img {
   max-width: 100%;
   height: auto;
@@ -410,6 +458,7 @@ img {
 .muted {
   color: var(--muted);
 }
+
 .auth-bar {
   display: flex;
   align-items: center;
@@ -420,3 +469,11 @@ img {
   font-weight: 600;
 }
 
+/* =========================
+   （可選）Modal 安全層級
+========================= */
+.modal-backdrop,
+.cc-modal-backdrop,
+.lr-modal-backdrop {
+  z-index: 3000;
+}

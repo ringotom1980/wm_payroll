@@ -313,7 +313,8 @@ main {
 }
 
 /* Sticky thead：自動避開 fixed header +（可選）頁面工具列 */
-.table thead th {
+/* 只有「需要」黏住表頭的表格，才加 .table--sticky class */
+.table--sticky thead th {
   position: sticky;
   top: calc(var(--wm-header-h) + var(--page-toolbar-h));
   z-index: 1;
@@ -325,6 +326,12 @@ main {
   padding: 10px 12px;
   border-bottom: 1px solid var(--line);
 }
+/* sticky 跟 border-collapse: separate 搭配比較穩 */
+.table--sticky {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
 .table tbody td {
   padding: 10px 12px;
   border-bottom: 1px solid #f1f5f9;
@@ -476,4 +483,14 @@ img {
 .cc-modal-backdrop,
 .lr-modal-backdrop {
   z-index: 3000;
+}
+
+/* 讓 footer 也跟內容一樣避開固定側欄 */
+.main-footer {
+  margin-left: var(--wm-sidebar-w);
+}
+@media (max-width: 1023px) {
+  .main-footer {
+    margin-left: 0;
+  }
 }

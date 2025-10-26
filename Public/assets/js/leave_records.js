@@ -1,24 +1,24 @@
-// Public/assets/js/leave_records.js
 (() => {
   'use strict';
 
-  // ---------- 小工具 ----------
+  // ---------- 工具 ----------
   const $  = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
-  const pad2 = (n) => String(n).padStart(2, '0');
 
   async function fetchJSON(url, opts = {}) {
     const res = await fetch(url, Object.assign({ credentials: 'include' }, opts));
     if (!res.ok) {
-      const txt = await res.text().catch(()=>'');
+      const txt = await res.text().catch(()=> '');
       throw new Error(`HTTP ${res.status} ${txt || ''}`.trim());
     }
     const ct = res.headers.get('content-type') || '';
     return ct.includes('application/json') ? res.json() : res.text();
   }
 
-  function fmt1(v) { // 顯示小數 1 位
-    return (Math.round((Number(v) || 0) * 10) / 10).toFixed(1);
+  // 顯示到小數第 3 位，去尾 0
+  function fmt3(v) {
+    const n = Math.round((Number(v) || 0) * 1000) / 1000;
+    return ('' + n).replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
   }
 
   function setMsg(txt, kind = '') {
@@ -27,7 +27,7 @@
     el.className = `lr-msg ${kind}`;
   }
 
-  // ---------- 共用年度（監聽上區塊 #ccYear） ----------
+  // ---------- 共用年度 ----------
   const yearSel = $('#ccYear');
   const monthSel = $('#ccMonth');
   const lrYearText = $('#lrYearText');
@@ -35,32 +35,27 @@
 
   let state = {
     year: yearSel ? Number(yearSel.value) : new Date().getFullYear(),
-    month: monthSel ? Number(monthSel.value) : (new Date().getMonth() + 1), // 供月窗初始
-    rows: [], // aggregate_year 的 items
+    month: monthSel ? Number(monthSel.value) : (new Date().getMonth() + 1),
+    rows: [],
     filter: ''
   };
 
   function initWiring() {
-    if (yearSel) {
-      yearSel.addEventListener('change', () => {
-        state.year = Number(yearSel.value);
-        lrYearText.textContent = `${state.year}`;
-        loadAggregate();
-      });
-    }
-    if (monthSel) {
-      monthSel.addEventListener('change', () => {
-        state.month = Number(monthSel.value);
-        // 月份只影響下方月窗的初始月份；不需重撈 aggregate
-      });
-    }
+    yearSel?.addEventListener('change', () => {
+      state.year = Number(yearSel.value);
+      lrYearText.textContent = `${state.year}`;
+      loadAggregate();
+    });
+    monthSel?.addEventListener('change', () => {
+      state.month = Number(monthSel.value);
+    });
     $('#lrSearch')?.addEventListener('input', (e) => {
       state.filter = (e.target.value || '').trim();
       renderTable();
     });
   }
 
-  // ---------- 載入年度彙總 ----------
+  // ---------- 年度彙總 ----------
   async function loadAggregate() {
     setMsg('載入中…');
     try {
@@ -77,7 +72,6 @@
     }
   }
 
-  // ---------- 繪製表格 ----------
   const COLS = [
     { key:'annual_quota', label:'應休特休' },
     { key:'annual_used',  label:'已休特休', clickable:true, code:'ANNUAL' },
@@ -101,7 +95,7 @@
       const leaveObj = r.leave || {};
       const colTds = COLS.map(c => {
         const val = (c.key in leaveObj) ? leaveObj[c.key] : r[c.key];
-        const txt = fmt1(val || 0);
+        const txt = fmt3(val || 0);
         const cls = ['cell-num'];
         let attrs = '';
         if (c.clickable) {
@@ -112,7 +106,11 @@
       }).join('');
 
       const pl = r.parental_leave_period || {};
-      const plStr = (pl.start && pl.end) ? `${pl.start} ～ ${pl.end}` : '';
+      const plHtml = `
+        ${pl.start ? `<div class="pl-line">開始：${escapeHtml(pl.start)}</div>` : ''}
+        ${pl.end   ? `<div class="pl-line">結束：${escapeHtml(pl.end)}</div>`   : ''}
+      `;
+
       const note = r.month_note || '';
 
       return `
@@ -120,16 +118,15 @@
           <td class="cell-idx">${idx+1}</td>
           <td class="cell-name">${escapeHtml(r.name || ('E'+r.emp_id))}</td>
           ${colTds}
-          <td class="cell-pl">${escapeHtml(plStr)}</td>
-          <td class="cell-note">
-            <button class="btn tiny btn-note" data-emp="${r.emp_id}" data-name="${escapeAttr(r.name||'')}" data-year="${state.year}" data-month="${state.month}">編輯</button>
+          <td class="cell-pl">${plHtml}</td>
+          <td class="cell-note" data-emp="${r.emp_id}" data-name="${escapeAttr(r.name||'')}">
             <div class="note-preview">${escapeHtml(note)}</div>
           </td>
         </tr>
       `;
     }).join('');
 
-    // 綁事件：點可編假別
+    // 綁事件
     $$('#lrTbody td.cell-clickable').forEach(td => {
       td.addEventListener('click', () => {
         const empId = Number(td.getAttribute('data-emp'));
@@ -138,11 +135,10 @@
         openMonthEditor(empId, name, code);
       });
     });
-    // 月備註
-    $$('.btn-note').forEach(b => {
-      b.addEventListener('click', () => {
-        const empId = Number(b.getAttribute('data-emp'));
-        const name  = b.getAttribute('data-name');
+    $$('#lrTbody td.cell-note').forEach(td => {
+      td.addEventListener('click', () => {
+        const empId = Number(td.getAttribute('data-emp'));
+        const name  = td.getAttribute('data-name');
         openMonthNote(empId, name, state.year, state.month);
       });
     });
@@ -162,13 +158,13 @@
         </header>
         <div class="lr-modal-body">
           <div class="lr-stats">
-            <div>本月小計：<strong id="lrMonthSubtotal">0.0</strong> 天</div>
-            ${leaveCode === 'ANNUAL' ? `<div>本年特休剩餘：<strong id="lrAnnualLeft">0.0</strong> 天</div>` : ''}
+            <div>本月小計：<strong id="lrMonthSubtotal">0</strong> 天</div>
+            ${leaveCode === 'ANNUAL' ? `<div>本年特休剩餘：<strong id="lrAnnualLeft">0</strong> 天</div>` : ''}
           </div>
           <div id="lrPLWarn" class="lr-warn" style="display:none;">該員育嬰留停中，僅可編輯非育嬰留停欄位</div>
           <div id="lrGrid" class="lr-grid"></div>
+          <div class="lr-hint">點一下「上午／下午」切換；再次點即可取消。小時為整數 0–8。<strong>＞4 小時時，上午／下午會鎖住</strong>。</div>
           <div id="lrModalMsg" class="lr-msg"></div>
-          <div class="lr-hint">點一下：標記為「${codeLabel(leaveCode)}」；已標記狀態下點右側「清除」可刪除該段。</div>
         </div>
         <footer class="lr-modal-footer">
           <button class="btn" id="lrSave">完成</button>
@@ -177,73 +173,75 @@
       </div>
     `;
     $('#lrModalsRoot')?.appendChild(modal);
-
     $('#lrClose', modal).onclick = close;
     $('#lrCancel', modal).onclick = close;
 
     // 狀態
-    let monthData = null; // list_month 回傳
-    const changes = new Map(); // key=date+slot => {action:'set'|'clear', code, note?}
+    let monthData = null;
+    const changes = new Map();      // key=date|slot -> {action:'set'|'clear', code}
+    const changesHours = new Map(); // key=date -> hours(int)
 
     // 載入
-    load();
-
-    async function load() {
+    (async function load() {
       setMsg2('載入中…');
       try {
         monthData = await fetchJSON(`/api/leave_records/list_month.php?emp_id=${empId}&year=${year}&month=${month}`);
         renderGrid();
-        // 初始化「本年特休剩餘」：從年度彙總抓
         if (leaveCode === 'ANNUAL') {
           const row = state.rows.find(r => r.emp_id === empId);
           const left = row ? Number(row.annual_left || 0) : 0;
-          $('#lrAnnualLeft', modal).textContent = fmt1(left);
+          $('#lrAnnualLeft', modal).textContent = fmt3(left);
         }
         setMsg2('');
       } catch (e) {
         console.warn(e);
         setMsg2('讀取失敗，請稍後重試', 'error');
       }
-    }
+    })();
 
     function renderGrid() {
       const wrap = $('#lrGrid', modal);
       const days = monthData?.days || [];
       const pl = monthData?.parental_leave || {};
       const pls = pl?.start, ple = pl?.end;
-      const lockMap = new Set();
+
+      const lockSet = new Set();
       if (pls && ple) {
-        // 鎖定該期間
         $('#lrPLWarn', modal).style.display = 'block';
-        // 以字串比較（YYYY-MM-DD）
-        days.forEach(d => {
-          if (d.date >= pls && d.date <= ple) lockMap.add(d.date);
-        });
+        days.forEach(d => { if (d.date >= pls && d.date <= ple) lockSet.add(d.date); });
+      } else if (ple && !pls) {
+        $('#lrPLWarn', modal).style.display = 'block';
+        days.forEach(d => { if (d.date <= ple) lockSet.add(d.date); });
       }
 
-      // 月小計（當前假別）
       let subtotal = 0;
-
       wrap.innerHTML = days.map(d => {
-        const am = d.AM, pm = d.PM;
-        const amMark = am ? am.code : null;
-        const pmMark = pm ? pm.code : null;
-        if (amMark === leaveCode) subtotal += 0.5;
-        if (pmMark === leaveCode) subtotal += 0.5;
+        const am = d.AM, pm = d.PM, hrs = d.HRS;
+        if (am?.code === leaveCode) subtotal += 0.5;
+        if (pm?.code === leaveCode) subtotal += 0.5;
+        if (hrs?.code === leaveCode && hrs?.hours) subtotal += (hrs.hours / 8);
 
-        const disabled = lockMap.has(d.date) ? ' disabled' : '';
+        const disabled = lockSet.has(d.date) ? ' disabled' : '';
+        const hoursVal = hrs?.hours ? parseInt(hrs.hours, 10) : 0;
+
         return `
           <div class="cell-day${disabled}" data-date="${d.date}">
             <div class="dayhead">${Number(d.date.slice(-2))}</div>
             <div class="slot-row">
-              ${renderSlot('AM', amMark, am?.id, am?.code, disabled)}
-              ${renderSlot('PM', pmMark, pm?.id, pm?.code, disabled)}
+              ${renderSlot('AM', am?.code, am?.id, disabled)}
+              ${renderSlot('PM', pm?.code, pm?.id, disabled)}
+            </div>
+            <div class="hrs-row">
+              <label>小時
+                <input type="number" class="hrs-input" min="0" max="8" step="1" value="${hoursVal}" ${disabled ? 'disabled':''} />
+              </label>
+              <div class="hrs-hint"><em>＞4 小時時，上午／下午會鎖住；只選半天時，小時上限 4。</em></div>
             </div>
           </div>
         `;
       }).join('');
 
-      $('#lrMonthSubtotal', modal).textContent = fmt1(subtotal);
+      $('#lrMonthSubtotal', modal).textContent = fmt3(subtotal);
 
       // 綁定
       $$('.cell-day:not(.disabled) .slot', wrap).forEach(el => {
@@ -251,20 +249,22 @@
       });
       $$('.cell-day:not(.disabled) .slot .clear', wrap).forEach(btn => {
         btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          onSlotClear(btn.closest('.slot'));
+          e.stopPropagation(); onSlotClear(btn.closest('.slot'));
         });
+      });
+      // hours
+      $$('.cell-day:not(.disabled) .hrs-input', wrap).forEach(inp => {
+        inp.addEventListener('input', () => onHoursInput(inp));
+        inp.addEventListener('change', () => onHoursInput(inp, true));
       });
     }
 
-    function renderSlot(slot, currentCode, recId, codeForDisplay, disabled) {
+    function renderSlot(slot, currentCode, recId, disabled) {
       const marked = !!currentCode;
-      const cls = ['slot'];
-      if (marked) cls.push('marked');
-      if (currentCode === leaveCode) cls.push('this-code');
+      const cls = ['slot']; if (marked) cls.push('marked'); if (currentCode === leaveCode) cls.push('this-code');
       return `
         <button class="${cls.join(' ')}"${disabled} data-slot="${slot}" data-id="${recId || ''}" data-code="${currentCode || ''}">
-          <span class="slot-name">${slot}</span>
+          <span class="slot-name">${slot === 'AM' ? '上午' : '下午'}</span>
           <span class="slot-badge">${currentCode ? codeLabel(currentCode) : '—'}</span>
           <span class="clear" title="清除">×</span>
         </button>
@@ -275,54 +275,81 @@
       const dayEl = el.closest('.cell-day');
       const dateStr = dayEl.getAttribute('data-date');
       const slot = el.getAttribute('data-slot');
-      const current = el.getAttribute('data-code') || ''; // 目前後端狀態
+      const current = el.getAttribute('data-code') || '';
       const target = leaveCode;
 
       if (current && current !== target) {
-        // 覆寫確認
-        const ok = confirm(`該員 ${dateStr} ${slot} 為「${codeLabel(current)}」，是否更改為「${codeLabel(target)}」？`);
-        if (!ok) return;
+        if (!confirm(`該員 ${dateStr} ${slot==='AM'?'上午':'下午'} 為「${codeLabel(current)}」，是否改為「${codeLabel(target)}」？`)) return;
       }
 
-      // 特休前置檢核：若將 set ANNUAL，先用畫面上的 annual_left 試算
+      // 小時互斥處理
+      const hrsInp = $('.hrs-input', dayEl);
+      const h = parseInt(hrsInp?.value || '0', 10) || 0;
+      const amEl = $('.slot[data-slot="AM"]', dayEl);
+      const pmEl = $('.slot[data-slot="PM"]', dayEl);
+      const other = (slot === 'AM') ? pmEl : amEl;
+
+      // 再點同格：取消
+      if (current) {
+        // 更新 subtotal / 特休 left
+        if (current === leaveCode) {
+          const cur = Number($('#lrMonthSubtotal', modal).textContent || '0');
+          $('#lrMonthSubtotal', modal).textContent = fmt3(Math.max(0, cur - 0.5));
+          if (leaveCode === 'ANNUAL') {
+            const leftEl = $('#lrAnnualLeft', modal);
+            if (leftEl) leftEl.textContent = fmt3(Number(leftEl.textContent||'0') + 0.5);
+          }
+        }
+        el.setAttribute('data-code','');
+        el.classList.remove('marked','this-code');
+        $('.slot-badge', el).textContent = '—';
+        changes.set(`${dateStr}|${slot}`, { action:'clear' });
+
+        // 解除因 h>0 而鎖的另一邊（若 h=0 也解除）
+        other.disabled = (h>0) ? true : false;
+        other.classList.toggle('disabled-soft', h>0);
+        // 若 AM 與 PM 都未選，且 h=0：hrs 可編輯；h>0：依規則（>4 鎖 AM/PM）
+        if (!amEl.getAttribute('data-code') && !pmEl.getAttribute('data-code')) {
+          if (hrsInp) {
+            if (h > 4) { amEl.disabled = pmEl.disabled = true; amEl.classList.add('disabled-soft'); pmEl.classList.add('disabled-soft'); }
+            else { amEl.disabled = pmEl.disabled = false; amEl.classList.remove('disabled-soft'); pmEl.classList.remove('disabled-soft'); }
+          }
+        }
+        return;
+      }
+
+      // 要設為 target
+      // 特休餘額試算（僅 ANNUAL）
       if (target === 'ANNUAL') {
         const leftEl = $('#lrAnnualLeft', modal);
         let left = leftEl ? Number(leftEl.textContent || '0') : 0;
-        const delta = (current === 'ANNUAL') ? 0 : 0.5;
-        if (left - delta < -1e-9) {
-          setMsg2(`剩餘特休不足，無法新增此筆（年度剩餘：${fmt1(left)} 天）`, 'error');
-          return;
-        }
+        if (left - 0.5 < -1e-9) { setMsg2(`剩餘特休不足（尚餘 ${fmt3(left)} 天）`, 'error'); return; }
       }
 
-      // 打標：暫時更新畫面與暫存變更
       el.setAttribute('data-code', target);
       el.classList.add('marked','this-code');
       $('.slot-badge', el).textContent = codeLabel(target);
+      changes.set(`${dateStr}|${slot}`, { action:'set', code: target });
 
-      // 月小計更新
       const cur = Number($('#lrMonthSubtotal', modal).textContent || '0');
-      if (current !== target) {
-        if (current === leaveCode) {
-          // 原本就是同假別，不變
-        } else {
-          $('#lrMonthSubtotal', modal).textContent = fmt1(cur + 0.5);
-        }
-      }
-
-      // 特休剩餘試算（僅 ANNUAL）
+      $('#lrMonthSubtotal', modal).textContent = fmt3(cur + 0.5);
       if (target === 'ANNUAL') {
         const leftEl = $('#lrAnnualLeft', modal);
-        if (leftEl) {
-          const left = Number(leftEl.textContent || '0');
-          const delta = (current === 'ANNUAL') ? 0 : 0.5;
-          leftEl.textContent = fmt1(left - delta);
-        }
+        if (leftEl) leftEl.textContent = fmt3(Number(leftEl.textContent||'0') - 0.5);
       }
 
-      // 記錄變更
-      const key = `${dateStr}|${slot}`;
-      changes.set(key, { action: 'set', code: target });
+      // 有 h>0 → 鎖住另一半天
+      if (h > 0) {
+        other.disabled = true; other.classList.add('disabled-soft');
+      }
+      // 若兩邊都被選 → hrs=0 並鎖
+      const amSel = !!amEl.getAttribute('data-code');
+      const pmSel = !!pmEl.getAttribute('data-code');
+      if (amSel && pmSel) {
+        if (hrsInp) { hrsInp.value = '0'; hrsInp.disabled = true; changesHours.set(dateStr, 0); }
+      } else {
+        if (hrsInp) hrsInp.disabled = false;
+      }
     }
 
     function onSlotClear(el) {
@@ -330,31 +357,72 @@
       const dateStr = dayEl.getAttribute('data-date');
       const slot = el.getAttribute('data-slot');
       const current = el.getAttribute('data-code') || '';
+      if (!current) return;
 
-      if (!current) return; // 本來就沒標
-
-      // 特休剩餘試算（若清掉的是 ANNUAL，剩餘回 +0.5）
-      if (current === 'ANNUAL') {
-        const leftEl = $('#lrAnnualLeft', modal);
-        if (leftEl) {
-          const left = Number(leftEl.textContent || '0');
-          leftEl.textContent = fmt1(left + 0.5);
-        }
-      }
-      // 月小計更新（若清掉的是當前視窗假別）
       if (current === leaveCode) {
         const cur = Number($('#lrMonthSubtotal', modal).textContent || '0');
-        $('#lrMonthSubtotal', modal).textContent = fmt1(Math.max(0, cur - 0.5));
+        $('#lrMonthSubtotal', modal).textContent = fmt3(Math.max(0, cur - 0.5));
+        if (current === 'ANNUAL') {
+          const leftEl = $('#lrAnnualLeft', modal);
+          if (leftEl) leftEl.textContent = fmt3(Number(leftEl.textContent||'0') + 0.5);
+        }
       }
-
-      // 清 UI
       el.setAttribute('data-code','');
       el.classList.remove('marked','this-code');
       $('.slot-badge', el).textContent = '—';
+      changes.set(`${dateStr}|${slot}`, { action:'clear' });
 
-      // 記錄變更
-      const key = `${dateStr}|${slot}`;
-      changes.set(key, { action: 'clear' });
+      // 解除鎖定邏輯交給 onSlotClick 裡的處理（這裡已做基本還原）
+    }
+
+    function onHoursInput(inp, clamp=false) {
+      let v = parseInt(inp.value || '0', 10);
+      if (isNaN(v) || v < 0) v = 0;
+      if (v > 8) v = 8;
+      if (clamp) inp.value = String(v);
+
+      const dayEl = inp.closest('.cell-day');
+      const dateStr = dayEl.getAttribute('data-date');
+      const amEl = $('.slot[data-slot="AM"]', dayEl);
+      const pmEl = $('.slot[data-slot="PM"]', dayEl);
+
+      const amSel = !!amEl.getAttribute('data-code');
+      const pmSel = !!pmEl.getAttribute('data-code');
+
+      // 規則 1：AM+PM 同選 → 小時鎖 0
+      if (amSel && pmSel) {
+        inp.value = '0'; inp.disabled = true; changesHours.set(dateStr, 0); return;
+      }
+      // 規則 2：只選一邊 → 小時上限 4
+      if ((amSel ^ pmSel) && v > 4) {
+        v = 4; inp.value = '4';
+      }
+      // 規則 3：兩邊都沒選
+      if (!amSel && !pmSel) {
+        if (v > 4) {
+          amEl.disabled = pmEl.disabled = true;
+          amEl.classList.add('disabled-soft'); pmEl.classList.add('disabled-soft');
+        } else {
+          amEl.disabled = pmEl.disabled = false;
+          amEl.classList.remove('disabled-soft'); pmEl.classList.remove('disabled-soft');
+        }
+      } else {
+        // 若只選一邊且 v<=4：另一邊維持可點但會被 onSlotClick 鎖住
+        const other = amSel ? pmEl : amEl;
+        other.disabled = (v > 0); // 有小時>0 → 鎖另一半天
+        other.classList.toggle('disabled-soft', v>0);
+      }
+
+      // 小計更新（先扣除舊的 HRS，再加新的）
+      const oldH = monthData?.days?.find(d => d.date === dateStr)?.HRS?.hours || 0;
+      let subtotal = Number($('#lrMonthSubtotal', modal).textContent || '0');
+      // 舊值（若屬於當前假別才影響小計）
+      const hrsCode = monthData?.days?.find(d => d.date === dateStr)?.HRS?.code;
+      if (hrsCode === leaveCode) subtotal -= (oldH / 8);
+      if (leaveCode) subtotal += (v / 8);
+      $('#lrMonthSubtotal', modal).textContent = fmt3(Math.max(0, subtotal));
+
+      changesHours.set(dateStr, v);
     }
 
     function codeLabel(c) {
@@ -364,46 +432,52 @@
       };
       return map[c] || c;
     }
-
     function setMsg2(t, k='') {
       const el = $('#lrModalMsg', modal);
       el.textContent = t || '';
       el.className = `lr-msg ${k}`;
     }
+    async function saveAll() {
+      // 先存 AM/PM
+      for (const [key, op] of changes.entries()) {
+        const [dateStr, slot] = key.split('|');
+        if (op.action === 'set') {
+          await fetchJSON('/api/leave_records/upsert.php', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emp_id: empId, date: dateStr, slot, leave_code: op.code })
+          });
+        } else {
+          await fetchJSON('/api/leave_records/delete.php', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emp_id: empId, date: dateStr, slot })
+          });
+        }
+      }
+      // 再存 HRS
+      for (const [dateStr, v] of changesHours.entries()) {
+        await fetchJSON('/api/leave_records/upsert.php', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emp_id: empId, date: dateStr, slot:'HRS', leave_code: leaveCode, hours: v })
+        });
+      }
+    }
 
     $('#lrSave', modal).onclick = async () => {
-      // 逐筆送出（完成即儲存）
       try {
         setMsg2('儲存中…');
-        for (const [key, op] of changes.entries()) {
-          const [dateStr, slot] = key.split('|');
-          if (op.action === 'set') {
-            await fetchJSON('/api/leave_records/upsert.php', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ emp_id: empId, date: dateStr, slot, leave_code: op.code })
-            });
-          } else if (op.action === 'clear') {
-            await fetchJSON('/api/leave_records/delete.php', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ emp_id: empId, date: dateStr, slot })
-            });
-          }
-        }
-        // 刷新年度彙總（該列）
-        await loadAggregate();
+        await saveAll();
+        await loadAggregate(); // 刷新表格
         close();
       } catch (e) {
         console.warn(e);
-        // 後端若回「特休不足」或「育嬰鎖定」，會是 400 + JSON 錯誤碼
-        const msg = (e.message || '').includes('ANNUAL_SHORTAGE') ? '剩餘特休不足，無法新增此筆' : '儲存失敗，請稍後重試';
-        setMsg2(msg, 'error');
+        setMsg2('儲存失敗，請稍後重試', 'error');
       }
     };
 
     function close(){ modal.remove(); }
   }
 
-  // ---------- 月備註彈窗 ----------
+  // ---------- 月備註彈窗（沿用，只是讓整格可點） ----------
   function openMonthNote(empId, empName, year, month) {
     const modal = document.createElement('div');
     modal.className = 'lr-modal-backdrop';
@@ -427,7 +501,6 @@
     $('#mnClose', modal).onclick = close;
     $('#mnCancel', modal).onclick = close;
 
-    // 讀取既有
     (async () => {
       try {
         const r = await fetchJSON(`/api/leave_records/month_notes.php?emp_id=${empId}&year=${year}&month=${month}`);
@@ -442,11 +515,9 @@
       try {
         $('#mnMsg', modal).textContent = '儲存中…';
         await fetchJSON('/api/leave_records/month_notes.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ emp_id: empId, year, month, note: $('#mnText', modal).value || '' })
         });
-        // 即時更新表格中該列備註預覽
         const row = state.rows.find(r => r.emp_id === empId);
         if (row) row.month_note = $('#mnText', modal).value || '';
         renderTable();
@@ -461,13 +532,12 @@
     function close(){ modal.remove(); }
   }
 
-  // ---------- HTML escape ----------
+  // HTML escape
   function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
   function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
 
-  // ---------- 啟動 ----------
+  // 啟動
   initWiring();
   lrYearText.textContent = `${state.year}`;
   loadAggregate();
-
 })();

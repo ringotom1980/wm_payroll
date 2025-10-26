@@ -9,7 +9,7 @@ $empId = (int)($input['emp_id'] ?? 0);
 $date  = (string)($input['date'] ?? '');
 $slot  = (string)($input['slot'] ?? '');
 
-if ($empId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !in_array($slot, ['AM','PM'], true)) {
+if ($empId <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !in_array($slot, ['AM','PM','HRS'], true)) {
   http_response_code(400); echo json_encode(['error'=>'Invalid params']); exit;
 }
 

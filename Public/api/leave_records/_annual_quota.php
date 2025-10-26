@@ -44,13 +44,14 @@ function _shifted_threshold(DateTime $hire, DateTime $nominal, array $exclusions
   }
 }
 
-/** 年資滿 k 年的年度配額（勞基法第38條） */
+/** ✅修正後：年資滿 k 年的年度配額（勞基法第38條） */
 function _quota_level_for_years(int $years): int {
   if ($years < 1) return 0;
   if ($years === 1) return 7;
   if ($years === 2) return 10;
   if ($years === 3) return 14;
-  if ($years >= 5) return min(30, 15 + ($years - 5)); // 5年起每年+1，上限30
+  if ($years >= 5 && $years < 10) return 15;             // ← 5–9 年 固定 15 日
+  if ($years >= 10) return min(30, 15 + ($years - 9));   // 10 年起每年 +1（10→16, 11→17, …）
   return 14; // 第4年仍14
 }
 
@@ -112,7 +113,7 @@ function calc_calendar_year_quota(PDO $pdo, int $empId, int $year): float {
   // 以「位移後周年」切段：滿1年起的級距 × 當年占比
   $cursor = clone $yStart;
 
-  // 找到年初時最後一個不超過年初的「位移後周年」的年數 k
+  // 年初時最後一個不超過年初的「位移後周年」的年數 k
   $k = 0;
   while (true) {
     $nomK = (clone $hireDt)->modify('+' . ($k+1) . ' years');

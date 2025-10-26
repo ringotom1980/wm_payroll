@@ -4,8 +4,8 @@ require __DIR__ . '/../partials/header.php'; // ✅ 與 employees.php 一致：�
 ?>
 
 <!-- 頁面專用樣式（外掛） -->
-<link href="/assets/css/company_calendar.css?v=5" rel="stylesheet">
-<link href="/assets/css/leave_records.css?v=5" rel="stylesheet">
+<link href="/assets/css/company_calendar.css?v=6" rel="stylesheet">
+<link href="/assets/css/leave_records.css?v=6" rel="stylesheet">
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 

@@ -79,29 +79,33 @@
     resignedPages = 1;
 
   function confirmDialog(title, msg) {
-    return new Promise((res) => {
-      els.modalTitle.textContent = title || '確認';
-      els.modalMsg.textContent = msg || '';
-      els.mask.hidden = false;
-      els.modal.hidden = false;
-      const onCancel = () => {
-        cleanup();
-        res(false);
-      };
-      const onOk = () => {
-        cleanup();
-        res(true);
-      };
-      function cleanup() {
-        els.mask.hidden = true;
-        els.modal.hidden = true;
-        els.modalCancel.removeEventListener('click', onCancel);
-        els.modalOk.removeEventListener('click', onOk);
-      }
-      els.modalCancel.addEventListener('click', onCancel, { once: true });
-      els.modalOk.addEventListener('click', onOk, { once: true });
-    });
-  }
+  return new Promise((res) => {
+    els.modalTitle.textContent = title || '確認';
+    els.modalMsg.textContent = msg || '';
+    els.mask.hidden = false;
+    els.modal.hidden = false;
+    document.body.classList.add('modal-open');  // ★ 新增：鎖捲動
+
+    const onCancel = () => {
+      cleanup();
+      res(false);
+    };
+    const onOk = () => {
+      cleanup();
+      res(true);
+    };
+    function cleanup() {
+      els.mask.hidden = true;
+      els.modal.hidden = true;
+      document.body.classList.remove('modal-open'); // ★ 新增：解除鎖捲動
+      els.modalCancel.removeEventListener('click', onCancel);
+      els.modalOk.removeEventListener('click', onOk);
+    }
+    els.modalCancel.addEventListener('click', onCancel, { once: true });
+    els.modalOk.addEventListener('click', onOk, { once: true });
+  });
+}
+
   async function apiFetch(url, opt = {}) {
     const r = await fetch(url, { credentials: 'same-origin', ...opt });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);

@@ -3,7 +3,7 @@ $PAGE_TITLE = '員工主檔';
 require __DIR__ . '/../partials/header.php'; // ✅ ← 頁首引入
 ?>
 
-<link href="/assets/css/employees.css?v=16" rel="stylesheet">
+<link href="/assets/css/employees.css?v=17" rel="stylesheet">
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 
@@ -232,7 +232,7 @@ require __DIR__ . '/../partials/header.php'; // ✅ ← 頁首引入
         </div>
     </div>
     <?php require __DIR__ . '/../partials/footer.php'; ?>
-    <script src="/assets/js/employees.js?v=10" defer></script>
+    <script src="/assets/js/employees.js?v=11" defer></script>
 </body>
 
 </html>

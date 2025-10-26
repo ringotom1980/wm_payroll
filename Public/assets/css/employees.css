@@ -241,3 +241,32 @@ html {
   animation: empFormFlash 0.8s ease-out 1;
   border-color: #0ea5e9 !important; /* 與 --brand 一致的藍色 */
 }
+
+/* ========== Modal 版型修正：固定覆蓋視窗 + 置中 ========== */
+.mask {
+  position: fixed;           /* 覆蓋整個視窗 */
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: saturate(180%) blur(2px);
+  z-index: 3000 !important;  /* 你原本就有，留著保險 */
+}
+
+.modal {
+  position: fixed;           /* 不是 static，避免被版面推走 */
+  inset: 0;
+  display: flex;
+  align-items: center;       /* 垂直置中 */
+  justify-content: center;   /* 水平置中 */
+  padding: 16px;             /* 小螢幕留內距避免貼邊 */
+  z-index: 3100 !important;  /* 你原本就有，留著保險 */
+}
+
+.modal-body {
+  max-width: min(560px, 92vw);
+  width: auto;               /* 以內容為主，別塞滿整行 */
+}
+
+/* 開窗時鎖捲動（可選） */
+body.modal-open {
+  overflow: hidden;
+}

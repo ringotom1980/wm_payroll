@@ -107,8 +107,8 @@
 
       const pl = r.parental_leave_period || {};
       const plHtml = `
-        ${pl.start ? `<div class="pl-line">開始：${escapeHtml(pl.start)}</div>` : ''}
-        ${pl.end   ? `<div class="pl-line">結束：${escapeHtml(pl.end)}</div>`   : ''}
+        ${pl.start ? `<div class="pl-line">${escapeHtml(pl.start)}</div>` : ''}
+        ${pl.end   ? `<div class="pl-line">${escapeHtml(pl.end)}</div>`   : ''}
       `;
 
       const note = r.month_note || '';

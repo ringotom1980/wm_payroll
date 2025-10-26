@@ -14,7 +14,7 @@ require __DIR__ . '/partials/header.php';
 
 <title><?= $APP_NAME ?>｜儀表板</title>
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
-<link href="/assets/css/dashboard.css?v=2" rel="stylesheet">
+<link href="/assets/css/dashboard.css?v=3" rel="stylesheet">
 </head>
 
 <body>

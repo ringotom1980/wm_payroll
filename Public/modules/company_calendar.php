@@ -10,9 +10,9 @@
   <link href="/assets/css/app.css?v=1" rel="stylesheet">
 
   <!-- 上區塊：公司行事曆樣式（外掛） -->
-  <link href="/assets/css/company_calendar.css?v=1" rel="stylesheet">
+  <link href="/assets/css/company_calendar.css?v=2" rel="stylesheet">
   <!-- 下區塊：員工年度統計樣式（外掛） -->
-  <link href="/assets/css/leave_records.css?v=1" rel="stylesheet">
+  <link href="/assets/css/leave_records.css?v=2" rel="stylesheet">
 
   <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>

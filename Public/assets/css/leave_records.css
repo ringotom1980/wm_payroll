@@ -272,40 +272,61 @@
 /* slot 禁用的柔性樣式 */
 .disabled-soft { opacity: .5; pointer-events: none; }
 
-/* === 讓中間數字欄更寬、把「育嬰留停 / 備註」壓窄 === */
+/* === 優化欄寬配置：中間數字區更寬、育嬰留停與備註平均 === */
 
-/* 1) 中間「數字」欄位：給些最小寬度與內距，避免擠到換行 */
+/* 1) 中間「數字」欄位：保持適中間距，避免擠到換行 */
 .lr-table td.cell-num {
-  padding: 8px 10px;        /* 原本是 10px，你可再加大一點 */
-  min-width: 64px;          /* 視情況可調到 68~80px */
+  padding: 8px 10px;
+  min-width: 72px;          /* 稍加寬，數值更清晰不擠 */
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
-/* 2) 把「育嬰留停」欄變窄：允許換行，限制最大寬度 */
-.lr-table thead th:nth-last-child(2),
-.lr-table tbody td:nth-last-child(2) { /* 倒數第 2 欄 = 育嬰留停 */
-  width: 1%;                 /* 交給內容自適應，盡量縮小 */
-  max-width: 140px;          /* 視覺上夠用了，還想更窄可改 120px */
-  white-space: normal;       /* 允許換行（上下兩行的排版會生效） */
-}
-
-/* 3) 把「備註」欄變窄：限制寬度 + 預覽最多兩行 */
-.lr-table thead th:nth-last-child(1),
-.lr-table tbody td:nth-last-child(1) { /* 最後一欄 = 備註 */
-  width: 1%;
-  max-width: 180px;          /* 想更窄可改 160px */
-}
-
-.cell-pl .pl-line {
-  line-height: 1.15;         /* 育嬰留停上下兩行的行距拉緊一些 */
-  font-size: 12px;
-}
-
-/* 4) 名字欄稍微收斂（原本 260px），挪空間給中間數字欄 */
+/* 2) 名字欄稍微收斂（原本 260px → 200px），挪空間給數字區 */
 .cell-name {
-  max-width: 200px;          /* 視覺 OK 可維持 200~220px */
+  max-width: 200px;
+  text-align: left;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* 5) 三字假別不要斷行（避免「生理假」被拆行） */
+/* 3) 育嬰留停 + 備註 平均寬度（例：160px，可依需求改 170/180） */
+.lr-table thead th:nth-last-child(2),
+.lr-table tbody td:nth-last-child(2),  /* 倒數第 2 欄 = 育嬰留停 */
+.lr-table thead th:nth-last-child(1),
+.lr-table tbody td:nth-last-child(1) { /* 倒數第 1 欄 = 備註 */
+  width: 160px;
+  max-width: 160px;
+}
+
+/* 4) 育嬰留停內容上下排列，允許換行，行距略緊 */
+.lr-table thead th:nth-last-child(2),
+.lr-table tbody td:nth-last-child(2) {
+  white-space: normal;
+}
+.cell-pl .pl-line {
+  line-height: 1.15;
+  font-size: 12px;
+  color: #374151;
+}
+
+/* 5) 備註：最多顯示兩行預覽，過長自動省略 */
+.cell-note {
+  min-width: 0; /* 取消原本 220px，避免撐太寬 */
+  text-align: left;
+}
+.cell-note .note-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-height: 2.8em;   /* 約兩行高度 */
+  line-height: 1.4;
+}
+
+
+/* 6) 三字假別不要斷行（避免「生理假」被拆行） */
 .slot .slot-badge {
   white-space: nowrap;
 }

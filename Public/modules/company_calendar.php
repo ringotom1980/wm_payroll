@@ -4,8 +4,8 @@ require __DIR__ . '/../partials/header.php'; // ✅ 與 employees.php 一致：�
 ?>
 
 <!-- 頁面專用樣式（外掛） -->
-<link href="/assets/css/company_calendar.css?v=6" rel="stylesheet">
-<link href="/assets/css/leave_records.css?v=6" rel="stylesheet">
+<link href="/assets/css/company_calendar.css?v=7" rel="stylesheet">
+<link href="/assets/css/leave_records.css?v=7" rel="stylesheet">
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 
@@ -14,7 +14,13 @@ require __DIR__ . '/../partials/header.php'; // ✅ 與 employees.php 一致：�
         <?php include __DIR__ . '/../partials/sidebar.php'; ?>
 
         <main class="content">
-            <h1 class="page-title">公司行事曆</h1>
+            <h1 class="page-title">
+                公司行事曆
+                <a href="https://data.gov.tw/dataset/14718" target="_blank" rel="noopener" class="gov-link">
+                    取得政府最新公布行事曆
+                </a>
+            </h1>
+
 
             <!-- 上區塊：共用年度/月份切換（本頁上區塊專用；下區塊共用年度值） -->
             <section class="card section-top">

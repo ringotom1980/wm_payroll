@@ -245,3 +245,21 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ===== 政府連結樣式 ===== */
+.gov-link {
+  font-size: 13px;
+  margin-left: 12px;
+  color: #0ea5e9;
+  text-decoration: none;
+  border: 1px solid #bae6fd;
+  background: #e0f2fe;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+.gov-link:hover {
+  background: #bae6fd;
+  color: #0369a1;
+  text-decoration: underline;
+}

@@ -1,9 +1,7 @@
 <?php
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
-
 $pdo  = require __DIR__ . '/../../../config/db.php';
-require_once __DIR__ . '/_annual_quota.php';
 
 $year = isset($_GET['year']) ? (int)$_GET['year'] : (int)date('Y');
 $monthForNote = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('n');
@@ -11,9 +9,30 @@ if ($year < 1900 || $year > 2100 || $monthForNote < 1 || $monthForNote > 12) {
   http_response_code(400); echo json_encode(['error'=>'Invalid params']); exit;
 }
 
-/** 改為呼叫共用：曆年制＋扣除育嬰留停期間 */
 function annual_quota(PDO $pdo, int $empId, int $year): float {
-  return calc_calendar_year_quota($pdo, $empId, $year);
+  try {
+    $q = $pdo->prepare("SELECT annual_quota_days FROM leave_annual_quota WHERE emp_id=? AND year=? LIMIT 1");
+    $q->execute([$empId, $year]);
+    $v = $q->fetchColumn();
+    if ($v !== false) return (float)$v;
+  } catch (Throwable $e) {}
+  $stmt = $pdo->prepare("SELECT hire_date FROM employees WHERE emp_id=? AND (is_deleted IS NULL OR is_deleted=0)");
+  $stmt->execute([$empId]);
+  $hire = $stmt->fetchColumn();
+  if (!$hire) return 0.0;
+  $hireDt = new DateTime($hire);
+  $yEnd   = new DateTime(sprintf('%04d-12-31', $year));
+  if ($yEnd < $hireDt) return 0.0;
+  $diff  = $hireDt->diff($yEnd);
+  $years = $diff->y + $diff->m/12.0;
+  $days  = 0.0;
+  if     ($years >= 0.5 && $years < 1)  $days = 3.0;
+  elseif ($years >= 1   && $years < 2)  $days = 7.0;
+  elseif ($years >= 2   && $years < 3)  $days = 10.0;
+  elseif ($years >= 3   && $years < 5)  $days = 14.0;
+  elseif ($years >= 5   && $years < 10) $days = 15.0;
+  elseif ($years >= 10)                 $days = min(30.0, 15.0 + (int)floor($years) - 10);
+  return round($days * 2) / 2.0;
 }
 
 try {
@@ -26,15 +45,13 @@ try {
   $start = sprintf('%04d-01-01', $year);
   $end   = sprintf('%04d-12-31', $year);
 
-  $stmt = $pdo->prepare("SELECT emp_id, leave_code, `date`, slot, hours
-                         FROM leave_records
-                         WHERE `date` BETWEEN ? AND ?");
+  $stmt = $pdo->prepare("SELECT emp_id, leave_code, `date`, slot, hours FROM leave_records WHERE `date` BETWEEN ? AND ?");
   $stmt->execute([$start, $end]);
   $rows = $stmt->fetchAll();
 
   $sum = [];
   foreach ($rows as $r) {
-    $eid  = (int)$r['emp_id'];
+    $eid = (int)$r['emp_id'];
     $code = $r['leave_code'];
     if ($r['slot'] === 'HRS') {
       $h = (int)($r['hours'] ?? 0);

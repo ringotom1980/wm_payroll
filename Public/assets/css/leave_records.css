@@ -26,30 +26,19 @@
   min-width: 220px;
 }
 
-.lr-table-wrap {
-  overflow: auto;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+.lr-table-wrap{
+  position: relative; /* 幫助 sticky 疊層與定位 */
 }
 .lr-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
 }
-/* sticky thead 避開 fixed header +（若頁面上方有工具列） */
-.lr-table thead th {
+.lr-table thead th{
   position: sticky;
-  top: calc(
-    var(--wm-header-h) + var(--page-toolbar-h)
-  ); /* ← 會跟著全站變數走 */
-  background: #f8fafc;
-  z-index: 1;
-  font-weight: 600;
-  font-size: 13px;
-  padding: 10px;
-  border-bottom: 1px solid #e5e7eb;
-  text-align: center;
-  white-space: nowrap;
+  top: 0 !important;      /* 關鍵：容器內滾動就設 0，不吃全站 header 高度 */
+  z-index: 2;             /* 蓋過 tbody 內容 */
+  background: #f8fafc;    /* 保留表頭底色 */
 }
 
 .lr-table tbody td {

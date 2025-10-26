@@ -163,7 +163,7 @@
           </div>
           <div id="lrPLWarn" class="lr-warn" style="display:none;">該員育嬰留停中，僅可編輯非育嬰留停欄位</div>
           <div id="lrGrid" class="lr-grid"></div>
-          <div class="lr-hint">點一下「上午／下午」切換；再次點即可取消。小時為整數 0–8。<strong>＞4 小時時，上午／下午會鎖住</strong>。</div>
+          <div class="lr-hint">點一下「上午／下午」切換；再次點即可取消。小時為整數 0–8。</div>
           <div class="hrs-hint"><em>＞4 小時時，上午／下午會鎖住；只選半天時，小時上限 4。</em></div>
           <div id="lrModalMsg" class="lr-msg"></div>
         </div>

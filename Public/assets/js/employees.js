@@ -20,6 +20,7 @@
     hire_date: $('#hire_date'),
     status: $('#status'),
     dependents_count: $('#dependents_count'),
+    parental_leave_start: $('#parental_leave_start'),
     expected_return_date: $('#expected_return_date'),
     resign_date: $('#resign_date'),
     btnCreate: $('#btnCreate'),
@@ -129,8 +130,21 @@
 
   function updateFormLocks() {
     const status = els.status.value;
-    els.expected_return_date.disabled = status !== 'LEAVE';
-    els.resign_date.disabled = status !== 'RESIGNED';
+    const onLeave = status === 'LEAVE';
+
+    // 育嬰兩欄：只有 LEAVE 才開；不是 LEAVE 就順手清空，避免 UI 留殘值
+    els.parental_leave_start.disabled = !onLeave;
+    els.expected_return_date.disabled = !onLeave;
+    if (!onLeave) {
+      if (els.parental_leave_start) els.parental_leave_start.value = '';
+      if (els.expected_return_date) els.expected_return_date.value = '';
+    }
+
+    // 離職日：只有 RESIGNED 才開；不是 RESIGNED 就順手清空
+    const onResigned = status === 'RESIGNED';
+    els.resign_date.disabled = !onResigned;
+    if (!onResigned && els.resign_date) els.resign_date.value = '';
+
     if (!editing) {
       els.btnCreate.disabled = false;
       els.btnSave.disabled = true;
@@ -142,7 +156,7 @@
     }
   }
 
-    // ---- 捲到上區塊並聚焦（點列表列時用） ----
+  // ---- 捲到上區塊並聚焦（點列表列時用） ----
   function jumpToForm() {
     const sec = $('#empFormSection');
     if (!sec) return;
@@ -174,6 +188,7 @@
       hire_date: els.hire_date.value || '',
       status: els.status.value,
       dependents_count: els.dependents_count.value || 0,
+      parental_leave_start: els.parental_leave_start.value || '',
       expected_return_date: els.expected_return_date.value || '',
       resign_date: els.resign_date.value || '',
     };
@@ -192,6 +207,7 @@
     els.hire_date.value = r.hire_date || '';
     els.status.value = r.status || 'ACTIVE';
     els.dependents_count.value = r.dependents_count ?? 0;
+    els.parental_leave_start.value = r.parental_leave_start || '';
     els.expected_return_date.value = r.expected_return_date || '';
     els.resign_date.value = r.resign_date || '';
     editing = !!r.emp_id;
@@ -202,10 +218,17 @@
     els.form.reset();
     els.emp_id.value = '';
     els.dependents_count.value = 0;
+
+    // 額外確保留停兩欄清空
+    if (els.parental_leave_start) els.parental_leave_start.value = '';
+    if (els.expected_return_date) els.expected_return_date.value = '';
+    if (els.resign_date) els.resign_date.value = '';
+
     editing = false;
     clearErrors();
     updateFormLocks();
   }
+
 
   // 必填驗證（你指定：姓名、生日、手機、住址、緊急聯絡人、聯絡手機、健保眷口數、到職日、在職狀況）
   function validateRequired() {
@@ -230,19 +253,45 @@
         ok = false;
       }
     });
-    ['birth_date', 'hire_date', 'expected_return_date', 'resign_date'].forEach((k) => {
+    ['birth_date', 'hire_date', 'resign_date'].forEach((k) => {
       if (f[k] && f[k] > today) {
         setErr(k, '不可晚於今天');
         ok = false;
       }
     });
+    // 預計復職日允許晚於今天 → 不檢核 today 上限
+
     if (Number(f.dependents_count) < 0) {
       setErr('dependents_count', '必須≥0');
       ok = false;
     }
     // 狀態聯動清理
-    if (f.status !== 'LEAVE') els.expected_return_date.value = '';
-    if (f.status !== 'RESIGNED') els.resign_date.value = '';
+    if (f.status !== 'LEAVE') {
+      els.parental_leave_start.value = '';
+      els.expected_return_date.value = '';
+    }
+    if (f.status !== 'RESIGNED') {
+      els.resign_date.value = '';
+    }
+
+    // LEAVE 狀態：兩欄必填 + end ≥ start
+    if (f.status === 'LEAVE') {
+      if (!f.parental_leave_start) {
+        setErr('parental_leave_start', '必填');
+        ok = false;
+      }
+      if (!f.expected_return_date) {
+        setErr('expected_return_date', '必填');
+        ok = false;
+      }
+      if (f.parental_leave_start && f.expected_return_date) {
+        if (f.expected_return_date < f.parental_leave_start) {
+          setErr('expected_return_date', '不得早於育嬰開始日');
+          ok = false;
+        }
+      }
+    }
+
     return ok;
   }
 

@@ -73,7 +73,7 @@ function tenure_text(?string $from, ?string $to = null): string
 /** columns whitelist for select */
 $baseCols = "emp_id, emp_no, full_name, birth_date, phone, phone_mobile, address, email,
              emergency_contact_name, emergency_contact_phone, emergency_contact_mobile,
-             hire_date, resign_date, status, dependents_count, expected_return_date";
+             hire_date, parental_leave_start, resign_date, status, dependents_count, expected_return_date";
 
 $commonWhere = "is_deleted=0";
 
@@ -196,6 +196,7 @@ if ($action === 'check_dupe') {
 }
 
 /* ===================== create ===================== */
+/* ===================== create ===================== */
 if ($action === 'create') {
     // ---- 讀取與基本整理 ----
     $full_name = trim($_POST['full_name'] ?? '');
@@ -212,6 +213,8 @@ if ($action === 'create') {
     $hire_date = trim($_POST['hire_date'] ?? '');
     $status = $_POST['status'] ?? 'ACTIVE';
     $dependents_count = (int)($_POST['dependents_count'] ?? 0);
+
+    $parental_leave_start = trim($_POST['parental_leave_start'] ?? '');
     $expected_return_date = trim($_POST['expected_return_date'] ?? '');
     $resign_date = trim($_POST['resign_date'] ?? '');
 
@@ -219,7 +222,7 @@ if ($action === 'create') {
     $today = (new DateTime('today'))->format('Y-m-d');
     $invalid = [];
 
-    // 必填：姓名、生日、手機、住址、緊急聯絡人、聯絡手機、健保眷口數、到職日、在職狀況
+    // 必填（一般欄位）
     if ($full_name === '') $invalid['full_name'] = '必填';
     if ($birth_date === '') $invalid['birth_date'] = '必填';
     if ($phone_mobile === '') $invalid['phone_mobile'] = '必填';
@@ -230,15 +233,29 @@ if ($action === 'create') {
     if ($status === '') $invalid['status'] = '必填';
     if ($dependents_count < 0) $invalid['dependents_count'] = '必須≥0';
 
-    // 日期不可晚於今天（生日 / 到職 / 預計復職 / 離職）
-    foreach (['birth_date', 'hire_date', 'expected_return_date', 'resign_date'] as $k) {
+    // 日期不可晚於今天（維持原規則）：生日 / 到職 / 離職
+    foreach (['birth_date', 'hire_date', 'resign_date'] as $k) {
         $v = $$k ?? '';
         if ($v !== '' && $v > $today) $invalid[$k] = '不可晚於今天';
     }
+    // 【重點】預計復職日允許晚於今天，不做今天上限檢核
 
-    // 狀態聯動：非 LEAVE -> 清空預計復職日；非 RESIGNED -> 清空離職日
-    if ($status !== 'LEAVE') $expected_return_date = '';
-    if ($status !== 'RESIGNED') $resign_date = '';
+    // 狀態聯動與留停欄位檢核
+    if ($status === 'LEAVE') {
+        // 兩欄必填
+        if ($parental_leave_start === '') $invalid['parental_leave_start'] = '必填';
+        if ($expected_return_date === '') $invalid['expected_return_date'] = '必填';
+        // 只有兩欄都有值才比較先後
+        if ($parental_leave_start !== '' && $expected_return_date !== '') {
+            if ($expected_return_date < $parental_leave_start) {
+                $invalid['expected_return_date'] = '不得早於育嬰開始日';
+            }
+        }
+    } else {
+        // 非 LEAVE → 強制清空
+        $parental_leave_start = '';
+        $expected_return_date = '';
+    }
 
     if (!empty($invalid)) {
         j(false, '請修正欄位錯誤', ['invalid_fields' => $invalid]);
@@ -256,20 +273,20 @@ if ($action === 'create') {
 
     // ---- 寫入 ----
     $sql = "INSERT INTO employees (
-  emp_no, full_name, birth_date,
-  phone, phone_mobile, address, email,
-  emergency_contact_name, emergency_contact_phone, emergency_contact_mobile,
-  hire_date, resign_date, status,
-  dependents_count, expected_return_date,
-  is_deleted, created_at, updated_at
-) VALUES (
-  :emp_no, :full_name, :birth_date,
-  :phone, :phone_mobile, :address, :email,
-  :emg_name, :emg_phone, :emg_mobile,
-  :hire_date, :resign_date, :status,
-  :dependents_count, :expected_return_date,
-  0, NOW(), NOW()
-)";
+      emp_no, full_name, birth_date,
+      phone, phone_mobile, address, email,
+      emergency_contact_name, emergency_contact_phone, emergency_contact_mobile,
+      hire_date, parental_leave_start, resign_date, status,
+      dependents_count, expected_return_date,
+      is_deleted, created_at, updated_at
+    ) VALUES (
+      :emp_no, :full_name, :birth_date,
+      :phone, :phone_mobile, :address, :email,
+      :emg_name, :emg_phone, :emg_mobile,
+      :hire_date, :parental_leave_start, :resign_date, :status,
+      :dependents_count, :expected_return_date,
+      0, NOW(), NOW()
+    )";
 
     try {
         $st = $pdo->prepare($sql);
@@ -285,6 +302,7 @@ if ($action === 'create') {
             ':emg_phone' => $emg_phone,
             ':emg_mobile' => $emg_mobile,
             ':hire_date' => $hire_date,
+            ':parental_leave_start' => ($status === 'LEAVE' ? ($parental_leave_start ?: null) : null),
             ':resign_date' => ($status === 'RESIGNED' ? ($resign_date ?: null) : null),
             ':status' => $status,
             ':dependents_count' => $dependents_count,
@@ -297,6 +315,7 @@ if ($action === 'create') {
 
     j(true, '新增完成', ['emp_id' => (int)$pdo->lastInsertId()]);
 }
+
 
 /* ===================== update ===================== */
 if ($action === 'update') {
@@ -322,6 +341,8 @@ if ($action === 'update') {
     $hire_date = trim($_POST['hire_date'] ?? '');
     $status = $_POST['status'] ?? 'ACTIVE';
     $dependents_count = (int)($_POST['dependents_count'] ?? 0);
+
+    $parental_leave_start = trim($_POST['parental_leave_start'] ?? '');
     $expected_return_date = trim($_POST['expected_return_date'] ?? '');
     $resign_date = trim($_POST['resign_date'] ?? '');
 
@@ -339,20 +360,30 @@ if ($action === 'update') {
     if ($status === '') $invalid['status'] = '必填';
     if ($dependents_count < 0) $invalid['dependents_count'] = '必須≥0';
 
-    foreach (['birth_date', 'hire_date', 'expected_return_date', 'resign_date'] as $k) {
+    // 日期不可晚於今天（維持原規則）：生日 / 到職 / 離職
+    foreach (['birth_date', 'hire_date', 'resign_date'] as $k) {
         $v = $$k ?? '';
         if ($v !== '' && $v > $today) $invalid[$k] = '不可晚於今天';
     }
+    // 【重點】預計復職日允許晚於今天，不做今天上限檢核
 
-    // 狀態聯動處理
-    if ($status !== 'LEAVE') $expected_return_date = '';
-    if ($status !== 'RESIGNED') $resign_date = '';
+    // 狀態聯動
+    if ($status === 'LEAVE') {
+        if ($parental_leave_start === '') $invalid['parental_leave_start'] = '必填';
+        if ($expected_return_date === '') $invalid['expected_return_date'] = '必填';
+        if ($parental_leave_start !== '' && $expected_return_date !== '' && $expected_return_date < $parental_leave_start) {
+            $invalid['expected_return_date'] = '不得早於育嬰開始日';
+        }
+    } else {
+        $parental_leave_start = '';
+        $expected_return_date = '';
+    }
 
     if (!empty($invalid)) {
         j(false, '請修正欄位錯誤', ['invalid_fields' => $invalid]);
     }
 
-    // （設計決策）update 不做重複擋，只做資料更新。若要擋，複用 create 的驗重邏輯即可。
+    // （設計）update 不做重複擋；如需擋，可複用 create 的驗重
 
     // ---- 寫入 ----
     $sql = "UPDATE employees SET
@@ -367,6 +398,7 @@ if ($action === 'update') {
           emergency_contact_phone=:emg_phone,
           emergency_contact_mobile=:emg_mobile,
           hire_date=:hire_date,
+          parental_leave_start=:parental_leave_start,
           resign_date=:resign_date,
           status=:status,
           dependents_count=:dependents_count,
@@ -376,7 +408,7 @@ if ($action === 'update') {
     $st = $pdo->prepare($sql);
     $st->execute([
         ':emp_id' => $emp_id,
-        ':emp_no' => null, // ⬅ 關鍵，不再塞空字串
+        ':emp_no' => null,
         ':full_name' => $full_name,
         ':birth_date' => ($birth_date ?: null),
         ':phone' => $phone,
@@ -387,15 +419,16 @@ if ($action === 'update') {
         ':emg_phone' => $emg_phone,
         ':emg_mobile' => $emg_mobile,
         ':hire_date' => $hire_date,
+        ':parental_leave_start' => ($status === 'LEAVE' ? ($parental_leave_start ?: null) : null),
         ':resign_date' => ($status === 'RESIGNED' ? ($resign_date ?: null) : null),
         ':status' => $status,
         ':dependents_count' => $dependents_count,
         ':expected_return_date' => ($status === 'LEAVE' ? ($expected_return_date ?: null) : null),
     ]);
 
-
     j(true, '已更新');
 }
+
 
 if ($action === 'soft_delete') {
     $emp_id = (int)($_POST['emp_id'] ?? 0);

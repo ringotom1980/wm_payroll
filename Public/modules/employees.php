@@ -3,7 +3,7 @@ $PAGE_TITLE = '員工主檔';
 require __DIR__ . '/../partials/header.php'; // ✅ ← 頁首引入
 ?>
 
-<link href="/assets/css/employees.css?v=15" rel="stylesheet">
+<link href="/assets/css/employees.css?v=16" rel="stylesheet">
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 
@@ -92,7 +92,7 @@ require __DIR__ . '/../partials/header.php'; // ✅ ← 頁首引入
                         </label>
                     </div>
 
-                    <!-- 第4行：到職日、在職狀況、預計復職日、離職日 -->
+                    <!-- 第4行：到職日、在職狀況、育嬰開始日、預計復職日、離職日 -->
                     <div class="grid row-4">
                         <label>
                             <span class="label-title">到職日<span class="req">*</span></span>
@@ -110,8 +110,15 @@ require __DIR__ . '/../partials/header.php'; // ✅ ← 頁首引入
                             <small class="err" data-for="status"></small>
                         </label>
 
+                        <!-- ★ 新增：育嬰開始日 -->
                         <label>
-                            <span class="label-title">預計復職日（限留職停薪時）</span>
+                            <span class="label-title">育嬰開始日（限留停時）<span class="req">*</span></span>
+                            <input type="date" id="parental_leave_start" disabled>
+                            <small class="err" data-for="parental_leave_start"></small>
+                        </label>
+
+                        <label>
+                            <span class="label-title">預計復職日（限留停時）<span class="req">*</span></span>
                             <input type="date" id="expected_return_date" disabled>
                             <small class="err" data-for="expected_return_date"></small>
                         </label>
@@ -225,7 +232,7 @@ require __DIR__ . '/../partials/header.php'; // ✅ ← 頁首引入
         </div>
     </div>
     <?php require __DIR__ . '/../partials/footer.php'; ?>
-    <script src="/assets/js/employees.js?v=9" defer></script>
+    <script src="/assets/js/employees.js?v=10" defer></script>
 </body>
 
 </html>

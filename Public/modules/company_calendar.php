@@ -64,7 +64,8 @@ require __DIR__ . '/../partials/header.php';
               <tr>
                 <th>項次</th>
                 <th>姓名</th>
-                <th>應休特休</th>
+                <th>規定特休</th>
+                <th>實給特休</th>
                 <th>已休特休</th>
                 <th>剩餘特休</th>
                 <th>普病</th>

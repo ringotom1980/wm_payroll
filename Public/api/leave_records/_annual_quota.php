@@ -158,3 +158,62 @@ function calc_calendar_year_quota(PDO $pdo, int $empId, int $year): float {
 
   return round($total, 1); // 一位小數
 }
+
+// === 新增：只計算「規定特休」（完全不看覆蓋值） ===
+function calc_calendar_year_quota_statutory(PDO $pdo, int $empId, int $year): float {
+  [$hireDt, $exclusions] = _fetch_hire_and_exclusions($pdo, $empId);
+  if (!$hireDt) return 0.0;
+
+  $yStart = (new DateTime(sprintf('%04d-01-01', $year)))->setTime(0,0,0);
+  $yEnd   = (new DateTime(sprintf('%04d-12-31', $year)))->setTime(0,0,0);
+  if ($hireDt > $yEnd) return 0.0;
+
+  $total = 0.0;
+
+  // 滿6個月特例（不按比例）
+  $nominal6m = (clone $hireDt)->modify('+6 months');
+  $shift6m   = _shifted_threshold($hireDt, $nominal6m, $exclusions);
+  if ($shift6m >= $yStart && $shift6m <= $yEnd) $total += 3.0;
+
+  // 以位移後周年切段計比例
+  $cursor = clone $yStart;
+  $k = 0;
+  while (true) {
+    $nomK   = (clone $hireDt)->modify('+' . ($k+1) . ' years');
+    $shiftK = _shifted_threshold($hireDt, $nomK, $exclusions);
+    if ($shiftK > $yStart) break;
+    $k++;
+  }
+  if ($k >= 1) {
+    $level = _quota_level_for_years($k);
+    $nextShift = _shifted_threshold($hireDt, (clone $hireDt)->modify('+' . ($k+1) . ' years'), $exclusions);
+    $segStart = clone $yStart;
+    $segEnd = (clone $nextShift)->modify('-1 day'); if ($segEnd > $yEnd) $segEnd = clone $yEnd;
+    if ($segStart <= $segEnd && $level > 0) $total += $level * _months_fraction($segStart, $segEnd);
+    $cursor = $nextShift; $k++;
+  } else {
+    $cursor = _shifted_threshold($hireDt, (clone $hireDt)->modify('+1 year'), $exclusions);
+    $k = 1;
+  }
+  while ($cursor <= $yEnd) {
+    $level = _quota_level_for_years($k); if ($level <= 0) break;
+    $nextShift = _shifted_threshold($hireDt, (clone $hireDt)->modify('+' . ($k+1) . ' years'), $exclusions);
+    $segStart = clone $cursor;
+    $segEnd = (clone $nextShift)->modify('-1 day'); if ($segEnd > $yEnd) $segEnd = clone $yEnd;
+    if ($segStart <= $segEnd) $total += $level * _months_fraction($segStart, $segEnd);
+    $cursor = $nextShift; $k++;
+  }
+  return round($total, 1);
+}
+
+// === 新增：取得「實給覆蓋值」（若無則回 null） ===
+function get_manual_quota_override(PDO $pdo, int $empId, int $year): ?float {
+  try {
+    $q = $pdo->prepare("SELECT annual_quota_days FROM leave_annual_quota WHERE emp_id=? AND year=? LIMIT 1");
+    $q->execute([$empId, $year]);
+    $v = $q->fetchColumn();
+    return ($v === false) ? null : (float)$v;
+  } catch (Throwable $e) {
+    return null;
+  }
+}

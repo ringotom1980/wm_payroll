@@ -274,7 +274,7 @@
 /* 1) 中間「數字」欄位：保持適中間距，避免擠到換行 */
 .lr-table td.cell-num {
   padding: 4px 6px;
-  min-width: 50px;          /* 稍加寬，數值更清晰不擠 */
+  min-width: 60px;          /* 稍加寬，數值更清晰不擠 */
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
@@ -326,14 +326,6 @@
 /* 6) 三字假別不要斷行（避免「生理假」被拆行） */
 .slot .slot-badge {
   white-space: nowrap;
-}
-
-/* 統一數字欄（避免數字擠壓/換行） */
-.lr-table td.cell-num {
-  padding: 8px 10px;
-  min-width: 72px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
 }
 
 /* 實給特休彈窗（±0.5 微調） */

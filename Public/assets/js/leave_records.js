@@ -90,42 +90,42 @@
 
 
   function renderTable() {
-  const f = (state.filter || '').toLowerCase();
-  const list = state.rows.filter(r => !f || (String(r.name || '').toLowerCase().includes(f)));
+    const f = (state.filter || '').toLowerCase();
+    const list = state.rows.filter(r => !f || (String(r.name || '').toLowerCase().includes(f)));
 
-  tbody.innerHTML = list.map((r, idx) => {
-    const leaveObj = r.leave || {};
-    const colTds = COLS.map(c => {
-      const rawVal = (c.key in leaveObj) ? leaveObj[c.key] : r[c.key];
-      let txt;
-      if (c.key === 'annual_quota_actual') {
-        // 實給特休：null/undefined/0 → 顯示空白
-        txt = (rawVal === null || rawVal === undefined || Number(rawVal) === 0)
-          ? ''
-          : Number(rawVal).toFixed(1);
-      } else {
-        // 其他數字：一律顯示到 1 位小數（包含 0.0）
-        const n = Number(rawVal || 0);
-        txt = n.toFixed(1);
-      }
+    tbody.innerHTML = list.map((r, idx) => {
+      const leaveObj = r.leave || {};
+      const colTds = COLS.map(c => {
+        const rawVal = (c.key in leaveObj) ? leaveObj[c.key] : r[c.key];
+        let txt;
+        if (c.key === 'annual_quota_actual') {
+          // 實給特休：null/undefined/0 → 顯示空白
+          txt = (rawVal === null || rawVal === undefined || Number(rawVal) === 0)
+            ? ''
+            : Number(rawVal).toFixed(1);
+        } else {
+          // 其他數字：一律顯示到 1 位小數（包含 0.0）
+          const n = Number(rawVal || 0);
+          txt = n.toFixed(1);
+        }
 
-      const cls = ['cell-num'];
-      let attrs = '';
-      if (c.clickable) {
-        cls.push('cell-clickable');
-        attrs = ` data-emp="${r.emp_id}" data-name="${escapeAttr(r.name || '')}" data-code="${c.code}"`;
-      }
-      return `<td class="${cls.join(' ')}"${attrs}>${txt}</td>`;
-    }).join('');
+        const cls = ['cell-num'];
+        let attrs = '';
+        if (c.clickable) {
+          cls.push('cell-clickable');
+          attrs = ` data-emp="${r.emp_id}" data-name="${escapeAttr(r.name || '')}" data-code="${c.code}"`;
+        }
+        return `<td class="${cls.join(' ')}"${attrs}>${txt}</td>`;
+      }).join('');
 
-    const pl = r.parental_leave_period || {};
-    const plHtml = `
+      const pl = r.parental_leave_period || {};
+      const plHtml = `
       ${pl.start ? `<div class="pl-line">${escapeHtml(pl.start)}</div>` : ''}
-      ${pl.end   ? `<div class="pl-line">${escapeHtml(pl.end)}</div>`   : ''}
+      ${pl.end ? `<div class="pl-line">${escapeHtml(pl.end)}</div>` : ''}
     `;
-    const note = r.month_note || '';
+      const note = r.month_note || '';
 
-    return `
+      return `
       <tr>
         <td class="cell-idx">${idx + 1}</td>
         <td class="cell-name">${escapeHtml(r.name || ('E' + r.emp_id))}</td>
@@ -136,37 +136,37 @@
         </td>
       </tr>
     `;
-  }).join('');
+    }).join('');
 
-  // 綁事件
-  $$('#lrTbody td.cell-clickable').forEach(td => {
-    td.addEventListener('click', () => {
-      const empId = Number(td.getAttribute('data-emp'));
-      const name  = td.getAttribute('data-name');
-      const code  = td.getAttribute('data-code');
+    // 綁事件
+    $$('#lrTbody td.cell-clickable').forEach(td => {
+      td.addEventListener('click', () => {
+        const empId = Number(td.getAttribute('data-emp'));
+        const name = td.getAttribute('data-name');
+        const code = td.getAttribute('data-code');
 
-      if (code === 'ANNUAL_ACTUAL') {
-        const row = state.rows.find(r => r.emp_id === empId);
-        const statutory = Number(row?.annual_quota_statutory || row?.annual_quota || 0); // 相容舊欄位
-        const actual    = (row?.annual_quota_actual === null || row?.annual_quota_actual === undefined)
-                          ? null : Number(row.annual_quota_actual);
-        // 需要你已實作 openActualAnnualModal(empId, name, statutory, actual)
-        openActualAnnualModal(empId, name, statutory, actual);
-        return;
-      }
+        if (code === 'ANNUAL_ACTUAL') {
+          const row = state.rows.find(r => r.emp_id === empId);
+          const statutory = Number(row?.annual_quota_statutory || row?.annual_quota || 0); // 相容舊欄位
+          const actual = (row?.annual_quota_actual === null || row?.annual_quota_actual === undefined)
+            ? null : Number(row.annual_quota_actual);
+          // 需要你已實作 openActualAnnualModal(empId, name, statutory, actual)
+          openActualAnnualModal(empId, name, statutory, actual);
+          return;
+        }
 
-      openMonthEditor(empId, name, code);
+        openMonthEditor(empId, name, code);
+      });
     });
-  });
 
-  $$('#lrTbody td.cell-note').forEach(td => {
-    td.addEventListener('click', () => {
-      const empId = Number(td.getAttribute('data-emp'));
-      const name  = td.getAttribute('data-name');
-      openMonthNote(empId, name, state.year, state.month);
+    $$('#lrTbody td.cell-note').forEach(td => {
+      td.addEventListener('click', () => {
+        const empId = Number(td.getAttribute('data-emp'));
+        const name = td.getAttribute('data-name');
+        openMonthNote(empId, name, state.year, state.month);
+      });
     });
-  });
-}
+  }
 
 
   // ---------- 月度編輯彈窗 ----------
@@ -504,10 +504,10 @@
   }
 
   function openActualAnnualModal(empId, empName, statutory, actual) {
-  const year = state.year;
-  const modal = document.createElement('div');
-  modal.className = 'lr-modal-backdrop';
-  modal.innerHTML = `
+    const year = state.year;
+    const modal = document.createElement('div');
+    modal.className = 'lr-modal-backdrop';
+    modal.innerHTML = `
     <div class="lr-modal" role="dialog" aria-modal="true" style="max-width:560px">
       <header class="lr-modal-header">
         <h3>${escapeHtml(empName)} — ${year} 年 — 實給特休</h3>
@@ -522,11 +522,14 @@
           <div class="aa-label">實給特休</div>
           <div class="aa-spin">
             <button class="btn tiny" id="aaMinus">－</button>
-            <div class="aa-display" id="aaDisplay">${(actual===null || actual===undefined || actual===0)? '' : Number(actual).toFixed(1)}</div>
+            <div class="aa-display" id="aaDisplay">${(actual === null || actual === undefined || actual === 0) ? '' : Number(actual).toFixed(1)}</div>
             <button class="btn tiny" id="aaPlus">＋</button>
+            <button class="btn tiny" id="aaClear" title="清空（設為空值）">清空</button>
           </div>
         </div>
-        <div class="aa-hint">只能用按鈕微調，步階 0.5；空白代表未設定（以規定特休計）。</div>
+        <div class="aa-hint">
+          只能用按鈕微調，步階 0.5；到「下限」再按一次 － 會清空。空白代表未設定（以規定特休計）。
+        </div>
         <div id="aaMsg" class="lr-msg"></div>
       </div>
       <footer class="lr-modal-footer">
@@ -535,83 +538,106 @@
       </footer>
     </div>
   `;
-  $('#lrModalsRoot')?.appendChild(modal);
-  const disp  = $('#aaDisplay', modal);
-  const btnM  = $('#aaMinus', modal);
-  const btnP  = $('#aaPlus', modal);
+    $('#lrModalsRoot')?.appendChild(modal);
 
-  let cur = (actual===null || actual===undefined || actual===0) ? null : Number(actual); // null=空值
-  const base = Number(statutory || 0);
-  const step = 0.5;
+    const disp = $('#aaDisplay', modal);
+    const btnM = $('#aaMinus', modal);
+    const btnP = $('#aaPlus', modal);
+    const btnClr = $('#aaClear', modal);
 
-  function refreshUI() {
-    disp.textContent = (cur===null) ? '' : cur.toFixed(1);
-    // 鎖定規則
-    if (base > 0) {
-      // 初始=base；－ 在 cur<=base 時鎖
-      const min = base;
-      btnM.disabled = (cur===null) ? true : (cur <= min + 1e-9);
-    } else {
-      // base=0：空→＋成0.5；在 0.5 時按 － 回空；空時 － 鎖
-      btnM.disabled = (cur===null);
-    }
-  }
-  refreshUI();
+    let cur = (actual === null || actual === undefined || actual === 0) ? null : Number(actual); // null=空值
+    const base = Number(statutory || 0);
+    const step = 0.5;
+    const EPS = 1e-9;
 
-  btnP.onclick = () => {
-    if (cur===null) {
-      // base>0 → 第一次按＋：cur=base+0.2? 不，規格是「下一個 0.5 刻度」
-      // 以步階 0.5 對齊到 >= base 的最近刻度
+    function refreshUI() {
+      disp.textContent = (cur === null) ? '' : cur.toFixed(1);
+
+      // 減號啟用規則
       if (base > 0) {
-        const ceilToStep = Math.ceil(base*2)/2; // 下一個 0.5 刻度（若本身就是 .0/.5 就等於 base）
-        cur = (ceilToStep <= base + 1e-9) ? (base + 0.5) : ceilToStep;
+        // 當前為空 → 不能再減
+        if (cur === null) {
+          btnM.disabled = true;
+        } else {
+          // 大於下限：可減（往下 0.5）
+          // 等於下限：也可減（按一次會「清空」）
+          btnM.disabled = false;
+        }
       } else {
-        cur = 0.5;
+        // base=0：空→不能減；>0 時可減，0.5 再減會清空
+        btnM.disabled = (cur === null);
       }
-    } else {
-      cur = Math.round((cur + step) * 2)/2;
-      if (base > 0 && cur < base) cur = base; // 保底
-    }
-    refreshUI();
-  };
 
-  btnM.onclick = () => {
-    if (cur===null) return;
-    if (base > 0) {
-      const next = Math.round((cur - step) * 2)/2;
-      if (next <= base + 1e-9) {
-        cur = base; // 不低於 base
+      // 清空鍵：有值才可清
+      btnClr.disabled = (cur === null);
+    }
+
+    btnP.onclick = () => {
+      if (cur === null) {
+        // 【修正後】：清空狀態時的第一個 "+" 行為
+        if (base > 0) {
+          // 從規定特休開始（例：15.7）
+          cur = base;
+        } else {
+          // base=0 時仍從 0.5 起跳
+          cur = 0.5;
+        }
       } else {
-        cur = next;
+        // 一般微調 +0.5
+        cur = Math.round((cur + step) * 2) / 2;
       }
-    } else {
-      // base=0：到 0.5 再減→空值
-      const next = Math.round((cur - step) * 2)/2;
-      cur = (next <= 0.5 + 1e-9) ? null : next;
-    }
+      refreshUI();
+    };
+
+
+    btnM.onclick = () => {
+      if (cur === null) return;
+
+      if (base > 0) {
+        // 二段式減法：>base 正常減；==base → 清空
+        if (cur > base + EPS) {
+          cur = Math.round((cur - step) * 2) / 2;
+          if (cur < base) cur = base; // 保底
+        } else {
+          // cur ~ base → 清空
+          cur = null;
+        }
+      } else {
+        // base=0：到 0.5 再減→空值
+        const next = Math.round((cur - step) * 2) / 2;
+        cur = (next <= 0.5 + EPS) ? null : next;
+      }
+      refreshUI();
+    };
+
+    btnClr.onclick = () => {
+      cur = null;
+      refreshUI();
+    };
+
+    function close() { modal.remove(); }
+    $('#aaClose', modal).onclick = close;
+    $('#aaCancel', modal).onclick = close;
+
+    $('#aaSave', modal).onclick = async () => {
+      try {
+        $('#aaMsg', modal).textContent = '儲存中…';
+        const payload = { emp_id: empId, year, value: (cur === null ? null : cur) };
+        await fetchJSON('/api/leave_records/annual_quota_set.php', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        await loadAggregate(); // annual_left 會跟著新基準重算
+        close();
+      } catch (e) {
+        console.warn(e);
+        $('#aaMsg', modal).textContent = '儲存失敗，請稍後重試';
+        $('#aaMsg', modal).classList.add('error');
+      }
+    };
+
     refreshUI();
-  };
+  }
 
-  function close(){ modal.remove(); }
-  $('#aaClose', modal).onclick = close;
-  $('#aaCancel', modal).onclick = close;
-
-  $('#aaSave', modal).onclick = async () => {
-    try {
-      $('#aaMsg', modal).textContent = '儲存中…';
-      const payload = { emp_id: empId, year, value: (cur===null? null : cur) };
-      await fetchJSON('/api/leave_records/annual_quota_set.php', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-      });
-      await loadAggregate(); // 讓 annual_left 依新基準重算
-      close();
-    } catch (e) {
-      console.warn(e);
-      $('#aaMsg', modal).textContent = '儲存失敗，請稍後重試';
-      $('#aaMsg', modal).classList.add('error');
-    }
-  };
-}
 
 
   // ---------- 月備註彈窗（沿用，只是讓整格可點） ----------

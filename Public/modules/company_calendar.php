@@ -4,8 +4,8 @@ require __DIR__ . '/../partials/header.php'; // ✅ 與 employees.php 一致：�
 ?>
 
 <!-- 頁面專用樣式（外掛） -->
-<link href="/assets/css/company_calendar.css?v=4" rel="stylesheet">
-<link href="/assets/css/leave_records.css?v=4" rel="stylesheet">
+<link href="/assets/css/company_calendar.css?v=5" rel="stylesheet">
+<link href="/assets/css/leave_records.css?v=5" rel="stylesheet">
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 
@@ -113,8 +113,8 @@ require __DIR__ . '/../partials/header.php'; // ✅ 與 employees.php 一致：�
     <?php require __DIR__ . '/../partials/footer.php'; ?>
 
     <!-- 頁面腳本（與 employees.php 一樣使用 defer） -->
-    <script src="/assets/js/company_calendar.js?v=2" defer></script>
-    <script src="/assets/js/leave_records.js?v=2" defer></script>
+    <script src="/assets/js/company_calendar.js?v=3" defer></script>
+    <script src="/assets/js/leave_records.js?v=3" defer></script>
 </body>
 
 </html>

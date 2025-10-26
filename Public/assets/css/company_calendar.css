@@ -1,8 +1,8 @@
-/*Public/assets/css/company_calendar.css*/
-/* ===== 公司行事曆（上區塊） ===== */
+/* ========== 公司行事曆（上區塊） ========== */
 .section-top {
   margin-bottom: 16px;
 }
+
 .cc-toolbar {
   display: flex;
   align-items: center;
@@ -16,6 +16,7 @@
   align-items: center;
   gap: 8px;
 }
+
 .cc-year,
 .cc-month {
   display: flex;
@@ -32,14 +33,14 @@
   background: #fff;
 }
 
+/* 匯入檔案 */
 .cc-file {
   position: relative;
   overflow: hidden;
   display: inline-flex;
   align-items: center;
 }
-/* 讓檔案欄位可被點到又不佔位（不要用 display:none 以免某些瀏覽器 label 失效） */
-.cc-file input[type="file"]{
+.cc-file input[type="file"] {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -49,9 +50,7 @@
   clip: rect(0 0 0 0);
   overflow: hidden;
 }
-
-/* 檔名顯示樣式 */
-.cc-filename{
+.cc-filename {
   margin-left: 10px;
   font-size: 13px;
   color: #6b7280;
@@ -61,10 +60,11 @@
   text-overflow: ellipsis;
   vertical-align: middle;
 }
-.cc-filename.has-file{
+.cc-filename.has-file {
   color: #111827;
 }
 
+/* 按鈕 */
 .btn {
   height: 36px;
   padding: 0 12px;
@@ -87,7 +87,17 @@
 .btn.secondary {
   background: #fff;
 }
+.btn.xsm {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+.btn.danger {
+  border-color: #fecaca;
+  background: #fee2e2;
+}
 
+/* 月格 */
 .cc-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -115,31 +125,48 @@
   font-weight: 600;
   color: #111827;
 }
-.cc-day .events {
+
+.cc-day.holiday {
+  background: #fde8ef;
+} /* 放假＝粉底 */
+.cc-day.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* 政府節日名（右上角，放假時紅字更顯眼） */
+.gov-note {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+/* 使用者記事（格子內：最多 2 筆，超量 +N） */
+.cc-day .notes {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12px;
+  font-size: 13px;
 }
-.cc-day .event {
-  line-height: 1.2;
-  word-break: break-word;
+.user-note {
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.time-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  font-size: 11px;
+  margin-right: 4px;
 }
 .cc-day .more {
   font-size: 12px;
   color: #6b7280;
 }
 
-.cc-day.holiday {
-  background: #fff1f2; /* 淡粉紅 */
-}
-/* .cc-day.makeup{ 補班不特別標示，維持一般底色；保留 class 方便未來擴充 } */
-
-.cc-day.disabled {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
+/* 訊息 */
 .cc-msg {
   margin-top: 10px;
   font-size: 13px;
@@ -152,7 +179,7 @@
   color: #065f46;
 }
 
-/* 簡易彈窗：由 JS 插入 */
+/* 簡易彈窗 */
 .cc-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -160,9 +187,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 3000; /* 原本 1000，避免被 header/側欄蓋住 */
+  z-index: 3000;
 }
-
 .cc-modal {
   width: 680px;
   max-width: 92vw;
@@ -189,19 +215,12 @@
   max-height: 70vh;
   overflow: auto;
 }
+
 .cc-row {
   display: grid;
   grid-template-columns: 150px 1fr;
   gap: 10px;
   align-items: center;
-}
-.cc-switch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.cc-switch input {
-  transform: scale(1.2);
 }
 .cc-textarea {
   width: 100%;
@@ -210,27 +229,19 @@
   border: 1px solid #e5e7eb;
   border-radius: 8px;
 }
-.cc-events {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.cc-event-item {
+
+/* 彈窗清單 */
+#notesList .cc-note-item {
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   padding: 8px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 8px;
 }
-.cc-event-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-.cc-modal footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
+#notesList .cc-note-item .txt {
+  white-space: pre-wrap;
+  word-break: break-word;
 }

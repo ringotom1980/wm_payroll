@@ -4,11 +4,13 @@ header('Content-Type: application/json; charset=utf-8');
 
 $pdo = require __DIR__ . '/../../../config/db.php';
 
-function normHoliday($v): ?int {
-  // 支援：0/2、Y/N、1/0（大小寫均可）
-  $s = strtoupper(trim((string)$v));
-  if ($s === 'Y' || $s === '1' || $s === '2') return 1; // 2=放假，1=放假（保留）
-  if ($s === 'N' || $s === '0') return 0;               // 0=工作日
+/** 支援 20250101 或 2025-01-01 */
+function normalize_csv_date(string $raw): ?string {
+  $s = trim($raw);
+  if (preg_match('/^\d{8}$/', $s)) {
+    return sprintf('%s-%s-%s', substr($s,0,4), substr($s,4,2), substr($s,6,2));
+  }
+  if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $s)) return $s;
   return null;
 }
 
@@ -19,82 +21,73 @@ if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
   http_response_code(400);
   echo json_encode(['error'=>'No file uploaded or upload error']); exit;
 }
-
 $tmp = $_FILES['file']['tmp_name'];
 if (!is_readable($tmp)) { http_response_code(400); echo json_encode(['error'=>'File not readable']); exit; }
 
 try {
   $pdo->beginTransaction();
-
   $fh = fopen($tmp, 'r');
   if ($fh === false) throw new RuntimeException('Failed to open file');
 
-  // 判斷表頭
+  // 嘗試吃掉表頭（但不強制）
   $lineNo = 0;
-  $peek = fgetcsv($fh);
+  $peek = fgetcsv($fh); $lineNo++;
   if ($peek === false) throw new RuntimeException('Empty CSV');
-  $lineNo++;
-  $firstCol = isset($peek[0]) ? trim((string)$peek[0]) : '';
-  if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $firstCol)) {
-    // 第一列就是資料，回捲
-    rewind($fh);
-    $lineNo = 0;
-  }
+  $maybeDate = normalize_csv_date((string)($peek[0] ?? ''));
+  if ($maybeDate) { rewind($fh); $lineNo = 0; }
 
   while (($row = fgetcsv($fh)) !== false) {
     $lineNo++;
-    // 期待欄位：0=西元日期, 1=星期(忽略), 2=是否放假(0/2 or Y/N or 1/0), 3=備註(文字)
-    $date = trim((string)($row[0] ?? ''));
-    $isHolRaw = $row[2] ?? '';
-    $note = isset($row[3]) ? trim((string)$row[3]) : null;
 
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
-      $errors[] = "CSV 第 {$lineNo} 行：日期格式錯誤（需 YYYY-MM-DD）";
-      continue;
-    }
-    $norm = normHoliday($isHolRaw);
-    if ($norm === null) {
-      $errors[] = "CSV 第 {$lineNo} 行：「是否放假」僅接受 Y/N、0/2 或 1/0";
-      continue;
-    }
+    // 0=日期(YYYYMMDD/YYYY-MM-DD), 1=星期(忽略), 2=是否放假(2=休,1=補班,0=上班), 3=備註(節日名)
+    $date = normalize_csv_date((string)($row[0] ?? ''));
+    if (!$date) { $errors[] = "CSV 第 {$lineNo} 行：日期格式錯誤（支援 YYYYMMDD / YYYY-MM-DD）"; continue; }
+
+    $flag = trim((string)($row[2] ?? ''));
+    $is_holiday = ($flag === '2') ? 1 : 0;
+    $is_makeup  = ($flag === '1') ? 1 : 0;
+
+    $govNote = isset($row[3]) ? trim((string)$row[3]) : null;
 
     $yearForResp  = $yearForResp  ?? (int)substr($date, 0, 4);
     $monthForResp = $monthForResp ?? (int)substr($date, 5, 2);
 
-    // upsert company_calendar（補班=0）
-    $stmt = $pdo->prepare("INSERT INTO company_calendar (`date`, is_holiday, is_makeup_workday, note, source, updated_at)
-                           VALUES (?, ?, 0, ?, 'CSV_GOV', NOW())
-                           ON DUPLICATE KEY UPDATE
-                             is_holiday=VALUES(is_holiday),
-                             note=VALUES(note),
-                             source='CSV_GOV',
-                             updated_at=NOW()");
-    $stmt->execute([$date, $norm, $note]);
+    // upsert：只動政府欄位，不碰使用者記事（在另一張表）
+    $stmt = $pdo->prepare("
+      INSERT INTO company_calendar (`date`, is_holiday, is_makeup_workday, note, source, updated_at)
+      VALUES (?, ?, ?, ?, 'CSV_GOV', NOW())
+      ON DUPLICATE KEY UPDATE
+        is_holiday         = VALUES(is_holiday),
+        is_makeup_workday  = VALUES(is_makeup_workday),
+        note               = VALUES(note),
+        source             = 'CSV_GOV',
+        updated_at         = NOW()
+    ");
+    $stmt->execute([$date, $is_holiday, $is_makeup, $govNote]);
 
-    // 方案 B：有備註 → 新增/覆寫 GOV_HOLIDAY（同日同標題去重）
-    if ($note !== null && $note !== '') {
+    // （可選）同步一筆 GOV_HOLIDAY 事件，供別處使用；同日同標題去重
+    if ($govNote) {
       $sel = $pdo->prepare("SELECT id FROM company_calendar_events WHERE `date`=? AND category='GOV_HOLIDAY' AND title=? LIMIT 1");
-      $sel->execute([$date, $note]);
+      $sel->execute([$date, $govNote]);
       $eid = (int)($sel->fetchColumn() ?: 0);
-      if ($eid > 0) {
-        $upd = $pdo->prepare("UPDATE company_calendar_events SET remark=NULL, source='CSV_GOV', updated_at=NOW() WHERE id=?");
+      if ($eid) {
+        $upd = $pdo->prepare("UPDATE company_calendar_events SET source='CSV_GOV', updated_at=NOW() WHERE id=?");
         $upd->execute([$eid]);
       } else {
-        $ins = $pdo->prepare("INSERT INTO company_calendar_events (`date`, category, title, remark, source, updated_at)
-                              VALUES (?, 'GOV_HOLIDAY', ?, NULL, 'CSV_GOV', NOW())");
-        $ins->execute([$date, $note]);
+        $ins = $pdo->prepare("INSERT INTO company_calendar_events (`date`, category, title, source, updated_at)
+                              VALUES (?, 'GOV_HOLIDAY', ?, 'CSV_GOV', NOW())");
+        $ins->execute([$date, $govNote]);
       }
     }
   }
   fclose($fh);
-
   $pdo->commit();
 
   $resp = ['ok'=>true, 'year'=>$yearForResp, 'month'=>$monthForResp];
-  if (!empty($errors)) $resp['errors'] = $errors;
+  if ($errors) $resp['errors'] = $errors;
   echo json_encode($resp, JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
-  if ($pdo->inTransaction()) { $pdo->rollBack(); }
+  if ($pdo->inTransaction()) $pdo->rollBack();
   http_response_code(500);
-  echo json_encode(['error'=>'Server error','detail'=>$e->getMessage(), 'errors'=>$errors], JSON_UNESCAPED_UNICODE);
+  echo json_encode(['error'=>'Server error','detail'=>$e->getMessage(),'errors'=>$errors], JSON_UNESCAPED_UNICODE);
 }

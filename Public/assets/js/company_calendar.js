@@ -91,229 +91,154 @@
         const data = state.monthData;
         if (!data) { wrap.innerHTML = ''; return; }
 
-        // 讓首週依 firstWeekday 推出空白格
         const blanks = Array.from({ length: data.firstWeekday || 0 }, () => `<div class="cc-day disabled"></div>`).join('');
+
         const days = (data.days || []).map(d => {
-            const dt = new Date(d.date);
-            const dayN = dt.getDate();
-            const isHoliday = Number(d.is_holiday) === 1;
-            const isMakeup = Number(d.is_makeup_workday) === 1;
+            const dayN = new Date(d.date).getDate();
             const classes = ['cc-day'];
-            if (isHoliday) classes.push('holiday');
-            if (isMakeup) classes.push('makeup');
+            if (Number(d.is_holiday) === 1) classes.push('holiday');
+            if (Number(d.is_makeup_workday) === 1) classes.push('makeup');
 
-            // 事件顯示：CSV 備註（GOV_HOLIDAY）優先
-            const events = Array.isArray(d.events) ? d.events.slice() : [];
-            events.sort((a, b) => {
-                const pa = a.category === 'GOV_HOLIDAY' ? 0 : 1;
-                const pb = b.category === 'GOV_HOLIDAY' ? 0 : 1;
-                return pa - pb;
-            });
+            const gov = d.gov_note ? `<span class="gov-note">${escapeHtml(d.gov_note)}</span>` : '';
 
-            const maxShow = 3; // 超過則以 +N 顯示
-            const show = events.slice(0, maxShow);
-            const more = events.length > maxShow ? `<div class="more">+${events.length - maxShow}</div>` : '';
+            const notes = Array.isArray(d.user_notes) ? d.user_notes : [];
+            const notesHtml = notes.map(n => {
+                const time = n.time_hhmm ? `<span class="time-badge">${escapeHtml(n.time_hhmm)}</span>` : '';
+                const firstLine = (n.text || '').split(/\r?\n/)[0];
+                const pin = n.is_pinned ? ' 📌' : '';
+                return `<div class="user-note" data-id="${n.id}">• ${time}${escapeHtml(firstLine)}${pin}</div>`;
+            }).join('');
 
-            const evHtml = show.map(ev => `<div class="event">• ${escapeHtml(ev.title || '')}</div>`).join('') + more;
+            const more = d.more_count > 0 ? `<div class="more">+${d.more_count}</div>` : '';
 
             return `
-        <div class="${classes.join(' ')}" data-date="${d.date}">
-          <header>
-            <div class="date">${dayN}</div>
-            ${isHoliday ? '<div title="放假">假</div>' : ''}
-          </header>
-          <div class="events">${evHtml}</div>
-        </div>
-      `;
+      <div class="${classes.join(' ')}" data-date="${d.date}">
+        <header><div class="date">${dayN}</div>${gov}</header>
+        <div class="notes">${notesHtml}${more}</div>
+      </div>
+    `;
         }).join('');
 
-        // 用 7 欄格排版；尾端不補空格也 OK
         wrap.innerHTML = blanks + days;
 
-        // 綁定點擊事件（開日期彈窗）
         $$('.cc-day[data-date]').forEach(el => {
-            el.addEventListener('click', () => openDateModal(el.getAttribute('data-date')));
+            el.addEventListener('click', () => openNotesModal(el.getAttribute('data-date')));
         });
     }
 
     // ---------- 彈窗 ----------
-    function openDateModal(dateStr) {
-        const d = (state.monthData?.days || []).find(x => x.date === dateStr);
-        if (!d) return;
+    async function openNotesModal(dateStr) {
+        const day = (state.monthData?.days || []).find(x => x.date === dateStr) || { user_notes: [], gov_note: null, more_count: 0 };
 
         const modal = document.createElement('div');
         modal.className = 'cc-modal-backdrop';
         modal.innerHTML = `
-      <div class="cc-modal" role="dialog" aria-modal="true" aria-label="日期編輯">
-        <header>
-          <h3>${dateStr}</h3>
-          <button class="btn" id="ccClose">關閉</button>
-        </header>
-        <div class="body">
-          <div class="cc-row">
-            <div>是否放假</div>
-            <div class="cc-switch"><input id="ccHoliday" type="checkbox" ${d.is_holiday ? 'checked' : ''}><label for="ccHoliday">是</label></div>
-          </div>
-          <div class="cc-row">
-            <div>是否補班</div>
-            <div class="cc-switch"><input id="ccMakeup" type="checkbox" ${d.is_makeup_workday ? 'checked' : ''}><label for="ccMakeup">是</label></div>
-          </div>
-          <div class="cc-row">
-            <div>當日備註</div>
-            <div><textarea id="ccNote" class="cc-textarea" placeholder="例如：春節、國慶日等…">${escapeHtml(d.note || '')}</textarea></div>
-          </div>
-
-          <div class="cc-row" style="align-items:flex-start;">
-            <div>事件清單</div>
-            <div>
-              <div class="cc-events" id="ccEvents">
-                ${renderEventItems(d.events || [])}
-              </div>
-              <div class="cc-event-actions">
-                <button class="btn" id="ccAddEvent">新增事件</button>
-              </div>
+    <div class="cc-modal" role="dialog" aria-modal="true" aria-label="當日記事">
+      <header>
+        <h3>${dateStr}${day.gov_note ? `　<span class="gov-note">${escapeHtml(day.gov_note)}</span>` : ''}</h3>
+        <button class="btn" id="ccClose">關閉</button>
+      </header>
+      <div class="body">
+        <div class="cc-row">
+          <div>新增記事</div>
+          <div>
+            <textarea id="newNote" class="cc-textarea" placeholder="輸入記事（可多行）"></textarea>
+            <div style="margin-top:6px; display:flex; gap:8px; align-items:center;">
+              <input id="newTime" type="time" style="height:32px;">
+              <label><input id="newPin" type="checkbox"> 置頂</label>
+              <button class="btn" id="btnAdd">新增</button>
             </div>
           </div>
-
-          <div id="ccModalMsg" class="cc-msg"></div>
         </div>
-        <footer>
-          <button class="btn" id="ccSave">完成</button>
-          <button class="btn" id="ccCancel">取消</button>
-        </footer>
+        <div class="cc-row" style="align-items:flex-start;">
+          <div>所有記事</div>
+          <div>
+            <div id="notesList"></div>
+            ${day.more_count ? `<div class="cc-msg">${day.more_count} 筆未顯示（月視圖只顯示前 2 筆）</div>` : ''}
+          </div>
+        </div>
+        <div id="ccModalMsg" class="cc-msg"></div>
       </div>
-    `;
+    </div>
+  `;
         document.body.appendChild(modal);
+        $('#ccClose', modal).onclick = () => modal.remove();
 
-        $('#ccClose', modal).onclick = close;
-        $('#ccCancel', modal).onclick = close;
-        $('#ccAddEvent', modal).onclick = () => addEventItem($('#ccEvents', modal), dateStr);
-        $('#ccSave', modal).onclick = () => saveDateModal(modal, dateStr);
-
-        function close() { modal.remove(); }
-    }
-
-    function renderEventItems(events) {
-        // CSV 備註（GOV_HOLIDAY）優先顯示
-        const items = events.slice().sort((a, b) => {
-            const pa = a.category === 'GOV_HOLIDAY' ? 0 : 1;
-            const pb = b.category === 'GOV_HOLIDAY' ? 0 : 1;
-            return pa - pb;
-        });
-        return items.map(ev => `
-      <div class="cc-event-item" data-id="${ev.id || ''}">
-        <label>類別
-          <select class="ev-category">
-            ${['GOV_HOLIDAY', 'MAKEUP', 'COMPANY_EVENT'].map(c => `<option value="${c}" ${ev.category === c ? 'selected' : ''}>${c}</option>`).join('')}
-          </select>
-        </label>
-        <label>標題
-          <input class="ev-title" type="text" value="${escapeAttr(ev.title || '')}" placeholder="事件名稱" />
-        </label>
-        <label style="grid-column: 1 / span 2;">說明
-          <input class="ev-remark" type="text" value="${escapeAttr(ev.remark || '')}" placeholder="（選填）" />
-        </label>
-        <div class="cc-event-actions" style="grid-column: 1 / span 2;">
-          <span style="margin-right:auto; font-size:12px; color:#6b7280;">來源：${ev.source || 'MANUAL'}</span>
-          <button class="btn danger ev-delete" data-id="${ev.id || ''}">刪除</button>
+        const listEl = $('#notesList', modal);
+        const renderList = (arr) => {
+            listEl.innerHTML = arr.map(n => `
+      <div class="cc-note-item" data-id="${n.id}">
+        <div class="txt">${n.time_hhmm ? `<span class="time-badge">${escapeHtml(n.time_hhmm)}</span>` : ''}${escapeHtml(n.text)}</div>
+        <div class="ops">
+          <button class="btn xsm edit">編輯</button>
+          <button class="btn xsm danger del">刪除</button>
         </div>
       </div>
     `).join('');
-    }
-
-    function addEventItem(container, dateStr) {
-        const div = document.createElement('div');
-        div.className = 'cc-event-item';
-        div.innerHTML = `
-      <label>類別
-        <select class="ev-category">
-          <option value="GOV_HOLIDAY">GOV_HOLIDAY</option>
-          <option value="MAKEUP">MAKEUP</option>
-          <option value="COMPANY_EVENT" selected>COMPANY_EVENT</option>
-        </select>
-      </label>
-      <label>標題
-        <input class="ev-title" type="text" placeholder="事件名稱" />
-      </label>
-      <label style="grid-column: 1 / span 2;">說明
-        <input class="ev-remark" type="text" placeholder="（選填）" />
-      </label>
-      <div class="cc-event-actions" style="grid-column: 1 / span 2;">
-        <span style="margin-right:auto; font-size:12px; color:#6b7280;">來源：MANUAL</span>
-        <button class="btn danger ev-delete">刪除</button>
-      </div>
-    `;
-        container.appendChild(div);
-        $('.ev-delete', div).onclick = () => div.remove();
-    }
-
-    function getModalValues(modal) {
-        return {
-            is_holiday: $('#ccHoliday', modal).checked ? 1 : 0,
-            is_makeup_workday: $('#ccMakeup', modal).checked ? 1 : 0,
-            note: $('#ccNote', modal).value.trim(),
-            events: $$('.cc-event-item', modal).map(el => ({
-                id: el.getAttribute('data-id') || null,
-                category: $('.ev-category', el).value,
-                title: $('.ev-title', el).value.trim(),
-                remark: $('.ev-remark', el).value.trim()
-            }))
+            $$('.cc-note-item .edit', listEl).forEach(btn => btn.onclick = () => editNote(btn.closest('.cc-note-item')));
+            $$('.cc-note-item .del', listEl).forEach(btn => btn.onclick = () => deleteNote(btn.closest('.cc-note-item')));
         };
-    }
+        renderList(day.user_notes);
 
-    async function saveDateModal(modal, dateStr) {
-        const msg = (t, k = '') => { const m = $('#ccModalMsg', modal); m.textContent = t || ''; m.className = `cc-msg ${k}`; };
-
-        const val = getModalValues(modal);
-        // 前端檢核：事件標題必填
-        for (const ev of val.events) {
-            if ((ev.title || '').trim() === '') {
-                msg('事件標題為必填', 'error'); return;
-            }
-            if (!['GOV_HOLIDAY', 'MAKEUP', 'COMPANY_EVENT'].includes(ev.category)) {
-                msg('事件類別為必選', 'error'); return;
-            }
-        }
-
-        try {
-            // 1) 更新 company_calendar
-            await fetchJSON('/api/company_calendar/upsert.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    date: dateStr,
-                    is_holiday: val.is_holiday,
-                    is_makeup_workday: val.is_makeup_workday,
-                    note: val.note,
-                    source: 'MANUAL'
-                })
-            });
-
-            // 2) 逐筆處理事件：有 id → upsert；無 id → 新增；刪除：使用者按「刪除」即移除節點，不送出即可
-            for (const ev of val.events) {
-                await fetchJSON('/api/company_calendar/events_upsert.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        id: ev.id, // 後端可選擇：若傳 null 則新增；若有值則更新
-                        date: dateStr,
-                        category: ev.category,
-                        title: ev.title,
-                        remark: ev.remark,
-                        source: 'MANUAL'
-                    })
+        $('#btnAdd', modal).onclick = async () => {
+            const text = $('#newNote', modal).value.trim();
+            if (!text) return setModalMsg('請輸入記事內容', 'error');
+            const time = $('#newTime', modal).value || null;
+            const pin = $('#newPin', modal).checked ? 1 : 0;
+            try {
+                await fetchJSON('/api/company_calendar/user_note_add.php', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: dateStr, text, time_hhmm: time, is_pinned: pin })
                 });
-            }
+                await loadMonth(); // 簡單做法：重載當月
+                const d2 = (state.monthData?.days || []).find(x => x.date === dateStr);
+                renderList(d2?.user_notes || []);
+                $('#newNote', modal).value = ''; $('#newTime', modal).value = ''; $('#newPin', modal).checked = false;
+                setModalMsg('已新增', 'success');
+            } catch (e) { console.warn(e); setModalMsg('新增失敗', 'error'); }
+        };
 
-            // 3) 重新載入當月
-            await loadMonth();
-            // 4) 關閉
-            modal.remove();
-        } catch (e) {
-            console.warn(e);
-            msg('儲存失敗，請稍後重試', 'error');
+        async function editNote(row) {
+            const id = +row.dataset.id;
+            const cur = (state.monthData?.days || []).find(x => x.date === dateStr)?.user_notes.find(n => n.id === id);
+            const val = prompt('修改記事內容：', cur?.text || '');
+            if (val === null) return;
+            try {
+                await fetchJSON('/api/company_calendar/user_note_update.php', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, text: val })
+                });
+                await loadMonth();
+                const d2 = (state.monthData?.days || []).find(x => x.date === dateStr);
+                renderList(d2?.user_notes || []);
+            } catch (e) { console.warn(e); setModalMsg('更新失敗', 'error'); }
         }
+
+        async function deleteNote(row) {
+            const id = +row.dataset.id;
+            if (!confirm('確定刪除此記事？')) return;
+            try {
+                await fetchJSON('/api/company_calendar/user_note_delete.php', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                await loadMonth();
+                const d2 = (state.monthData?.days || []).find(x => x.date === dateStr);
+                renderList(d2?.user_notes || []);
+            } catch (e) { console.warn(e); setModalMsg('刪除失敗', 'error'); }
+        }
+
+        function setModalMsg(t, k = '') { const m = $('#ccModalMsg', modal); m.textContent = t || ''; m.className = `cc-msg ${k}`; }
     }
+
+
+    async function reloadDay(dateStr) {
+        // 簡單作法：重載當月（你已有 loadMonth）
+        await loadMonth();
+    }
+
+
+
 
     // ---------- 檔名即時顯示 ----------
     (() => {

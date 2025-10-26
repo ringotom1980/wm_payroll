@@ -3,7 +3,7 @@ $PAGE_TITLE = '公司行事曆';
 require __DIR__ . '/../partials/header.php';
 ?>
 <link href="/assets/css/company_calendar.css?v=7" rel="stylesheet">
-<link href="/assets/css/leave_records.css?v=13" rel="stylesheet">
+<link href="/assets/css/leave_records.css?v=14" rel="stylesheet">
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 <body>

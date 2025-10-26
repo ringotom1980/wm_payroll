@@ -273,8 +273,8 @@
 
 /* 1) 中間「數字」欄位：保持適中間距，避免擠到換行 */
 .lr-table td.cell-num {
-  padding: 6px 8px;
-  min-width: 60px;          /* 稍加寬，數值更清晰不擠 */
+  padding: 4px 6px;
+  min-width: 50px;          /* 稍加寬，數值更清晰不擠 */
   text-align: center;
   font-variant-numeric: tabular-nums;
 }

@@ -94,6 +94,6 @@ require __DIR__ . '/../partials/header.php';
 
   <?php require __DIR__ . '/../partials/footer.php'; ?>
   <script src="/assets/js/company_calendar.js?v=3" defer></script>
-  <script src="/assets/js/leave_records.js?v=14" defer></script>
+  <script src="/assets/js/leave_records.js?v=15" defer></script>
 </body>
 </html>

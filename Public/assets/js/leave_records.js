@@ -41,19 +41,28 @@
   };
 
   function initWiring() {
+
+
+    // 年度變更 → 更新 state + 顯示文字 + 重載
     yearSel?.addEventListener('change', () => {
       state.year = Number(yearSel.value);
       lrYearText.textContent = `${state.year}`;
       loadAggregate();
     });
+
+    // 月份變更 → 更新 state + 重載（★ 這裡是關鍵）
     monthSel?.addEventListener('change', () => {
       state.month = Number(monthSel.value);
+      loadAggregate();
     });
+
+    // 搜尋
     $('#lrSearch')?.addEventListener('input', (e) => {
       state.filter = (e.target.value || '').trim();
       renderTable();
     });
   }
+
 
   // ---------- 年度彙總 ----------
   async function loadAggregate() {
@@ -61,7 +70,7 @@
     try {
       const data = await fetchJSON(`/api/leave_records/aggregate_year.php?year=${state.year}&month=${state.month}`);
       state.rows = Array.isArray(data.items) ? data.items : [];
-      lrYearText.textContent = `${data.year}`;
+      lrYearText.textContent = `${data.year} 年 ${state.month} 月`;
       renderTable();
       setMsg('');
     } catch (e) {
@@ -701,6 +710,7 @@
 
   // 啟動
   initWiring();
-  lrYearText.textContent = `${state.year}`;
+  lrYearText.textContent = `${state.year} 年 ${state.month} 月`;
   loadAggregate();
+
 })();

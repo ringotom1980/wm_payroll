@@ -51,7 +51,7 @@ require __DIR__ . '/../partials/header.php';
       <section class="card section-bottom" id="lrSection">
         <div class="lr-toolbar">
           <div class="lr-left">
-            <div class="lr-year-display">年度：<span id="lrYearText">—</span></div>
+            <div class="lr-year-display">目前月份：<span id="lrYearText">—</span></div>
           </div>
           <div class="lr-right">
             <input id="lrSearch" class="lr-search" type="search" placeholder="搜尋員工姓名…" />

@@ -1,3 +1,4 @@
+// Public/assets/js/leave_records.js
 (() => {
   'use strict';
 
@@ -41,18 +42,17 @@
   };
 
   function initWiring() {
-
-
     // 年度變更 → 更新 state + 顯示文字 + 重載
     yearSel?.addEventListener('change', () => {
       state.year = Number(yearSel.value);
-      lrYearText.textContent = `${state.year}`;
+      lrYearText.textContent = `${state.year} 年 ${state.month} 月`;
       loadAggregate();
     });
 
-    // 月份變更 → 更新 state + 重載（★ 這裡是關鍵）
+    // 月份變更 → 更新 state + 重載
     monthSel?.addEventListener('change', () => {
       state.month = Number(monthSel.value);
+      lrYearText.textContent = `${state.year} 年 ${state.month} 月`;
       loadAggregate();
     });
 
@@ -62,7 +62,6 @@
       renderTable();
     });
   }
-
 
   // ---------- 年度彙總 ----------
   async function loadAggregate() {
@@ -81,73 +80,99 @@
     }
   }
 
+  // dual: true = 上行顯示「當月」、下行顯示「整年」
   const COLS = [
-    { key: 'annual_quota_statutory', label: '應休特休' }, // 規定（純演算法）
-    { key: 'annual_quota_actual', label: '實給特休', clickable: true, code: 'ANNUAL_ACTUAL' }, // 新增
-    { key: 'annual_used', label: '已休特休', clickable: true, code: 'ANNUAL' },
+    { key: 'annual_quota_statutory', label: '規定特休' }, // 規定（純演算法）
+    { key: 'annual_quota_actual', label: '實給特休', clickable: true, code: 'ANNUAL_ACTUAL' },
+    { key: 'annual_used', label: '已休特休', clickable: true, code: 'ANNUAL', dual: true, monthKey: 'annual_used_month' },
     { key: 'annual_left', label: '剩餘特休' },
-    { key: 'SICK', label: '普病', clickable: true, code: 'SICK' },
-    { key: 'OCC_SICK', label: '公病', clickable: true, code: 'OCC_SICK' },
-    { key: 'MARRIAGE', label: '婚假', clickable: true, code: 'MARRIAGE' },
-    { key: 'FUNERAL', label: '喪假', clickable: true, code: 'FUNERAL' },
-    { key: 'PERSONAL', label: '事假', clickable: true, code: 'PERSONAL' },
-    { key: 'MATERNITY', label: '產假', clickable: true, code: 'MATERNITY' },
-    { key: 'PATERNITY', label: '陪產假', clickable: true, code: 'PATERNITY' },
-    { key: 'FAMILY_CARE', label: '照顧假', clickable: true, code: 'FAMILY_CARE' },
-    { key: 'MENSTRUAL', label: '生理假', clickable: true, code: 'MENSTRUAL' },
-  ];
 
+    { key: 'SICK',        label: '普病',   clickable: true, code: 'SICK',        dual: true },
+    { key: 'OCC_SICK',    label: '公病',   clickable: true, code: 'OCC_SICK',    dual: true },
+    { key: 'MARRIAGE',    label: '婚假',   clickable: true, code: 'MARRIAGE',    dual: true },
+    { key: 'FUNERAL',     label: '喪假',   clickable: true, code: 'FUNERAL',     dual: true },
+    { key: 'PERSONAL',    label: '事假',   clickable: true, code: 'PERSONAL',    dual: true },
+    { key: 'MATERNITY',   label: '產假',   clickable: true, code: 'MATERNITY',   dual: true },
+    { key: 'PATERNITY',   label: '陪產假', clickable: true, code: 'PATERNITY',   dual: true },
+    { key: 'FAMILY_CARE', label: '照顧假', clickable: true, code: 'FAMILY_CARE', dual: true },
+    { key: 'MENSTRUAL',   label: '生理假', clickable: true, code: 'MENSTRUAL',   dual: true },
+  ];
 
   function renderTable() {
     const f = (state.filter || '').toLowerCase();
     const list = state.rows.filter(r => !f || (String(r.name || '').toLowerCase().includes(f)));
 
     tbody.innerHTML = list.map((r, idx) => {
-      const leaveObj = r.leave || {};
-      const colTds = COLS.map(c => {
-        const rawVal = (c.key in leaveObj) ? leaveObj[c.key] : r[c.key];
-        let txt;
-        if (c.key === 'annual_quota_actual') {
-          // 實給特休：null/undefined/0 → 顯示空白
-          txt = (rawVal === null || rawVal === undefined || Number(rawVal) === 0)
-            ? ''
-            : Number(rawVal).toFixed(1);
-        } else {
-          // 其他數字：一律顯示到 1 位小數（包含 0.0）
-          const n = Number(rawVal || 0);
-          txt = n.toFixed(1);
-        }
+      const leaveYear  = r.leave || {};
+      const leaveMonth = r.leave_month || {};
 
+      const colTds = COLS.map(c => {
         const cls = ['cell-num'];
         let attrs = '';
+        let innerHtml = '';
+
+        // 可點欄位
         if (c.clickable) {
           cls.push('cell-clickable');
           attrs = ` data-emp="${r.emp_id}" data-name="${escapeAttr(r.name || '')}" data-code="${c.code}"`;
         }
-        return `<td class="${cls.join(' ')}"${attrs}>${txt}</td>`;
+
+        if (c.dual) {
+          // 兩行：上 = 當月，下 = 全年
+          let yearVal = 0;
+          let monthVal = 0;
+
+          if (c.key === 'annual_used') {
+            yearVal  = Number(r.annual_used || 0);
+            monthVal = Number(r.annual_used_month || 0);
+          } else {
+            yearVal  = Number(leaveYear[c.key]  || 0);
+            monthVal = Number(leaveMonth[c.key] || 0);
+          }
+
+          innerHtml = `
+            <div class="lr-val-month">${monthVal.toFixed(1)}</div>
+            <div class="lr-val-year">${yearVal.toFixed(1)}</div>
+          `;
+          cls.push('cell-dual');
+        } else if (c.key === 'annual_quota_actual') {
+          // 實給特休：null/undefined/0 → 顯示空白
+          const rawVal = r.annual_quota_actual;
+          const txt = (rawVal === null || rawVal === undefined || Number(rawVal) === 0)
+            ? ''
+            : Number(rawVal).toFixed(1);
+          innerHtml = txt;
+        } else {
+          // 其他單行欄位
+          const rawVal = (c.key in leaveYear) ? leaveYear[c.key] : r[c.key];
+          const n = Number(rawVal || 0);
+          innerHtml = n.toFixed(1);
+        }
+
+        return `<td class="${cls.join(' ')}"${attrs}>${innerHtml}</td>`;
       }).join('');
 
       const pl = r.parental_leave_period || {};
       const plHtml = `
-      ${pl.start ? `<div class="pl-line">${escapeHtml(pl.start)}</div>` : ''}
-      ${pl.end ? `<div class="pl-line">${escapeHtml(pl.end)}</div>` : ''}
-    `;
+        ${pl.start ? `<div class="pl-line">${escapeHtml(pl.start)}</div>` : ''}
+        ${pl.end   ? `<div class="pl-line">${escapeHtml(pl.end)}</div>`   : ''}
+      `;
       const note = r.month_note || '';
 
       return `
-      <tr>
-        <td class="cell-idx">${idx + 1}</td>
-        <td class="cell-name">${escapeHtml(r.name || ('E' + r.emp_id))}</td>
-        ${colTds}
-        <td class="cell-pl">${plHtml}</td>
-        <td class="cell-note" data-emp="${r.emp_id}" data-name="${escapeAttr(r.name || '')}">
-          <div class="note-preview">${escapeHtml(note)}</div>
-        </td>
-      </tr>
-    `;
+        <tr>
+          <td class="cell-idx">${idx + 1}</td>
+          <td class="cell-name">${escapeHtml(r.name || ('E' + r.emp_id))}</td>
+          ${colTds}
+          <td class="cell-pl">${plHtml}</td>
+          <td class="cell-note" data-emp="${r.emp_id}" data-name="${escapeAttr(r.name || '')}">
+            <div class="note-preview">${escapeHtml(note)}</div>
+          </td>
+        </tr>
+      `;
     }).join('');
 
-    // 綁事件
+    // 綁事件：假別欄
     $$('#lrTbody td.cell-clickable').forEach(td => {
       td.addEventListener('click', () => {
         const empId = Number(td.getAttribute('data-emp'));
@@ -159,7 +184,6 @@
           const statutory = Number(row?.annual_quota_statutory || row?.annual_quota || 0); // 相容舊欄位
           const actual = (row?.annual_quota_actual === null || row?.annual_quota_actual === undefined)
             ? null : Number(row.annual_quota_actual);
-          // 需要你已實作 openActualAnnualModal(empId, name, statutory, actual)
           openActualAnnualModal(empId, name, statutory, actual);
           return;
         }
@@ -168,6 +192,7 @@
       });
     });
 
+    // 綁事件：備註欄
     $$('#lrTbody td.cell-note').forEach(td => {
       td.addEventListener('click', () => {
         const empId = Number(td.getAttribute('data-emp'));
@@ -176,7 +201,6 @@
       });
     });
   }
-
 
   // ---------- 月度編輯彈窗 ----------
   function openMonthEditor(empId, empName, leaveCode) {
@@ -270,7 +294,6 @@
               <label>小時
                 <input type="number" class="hrs-input" min="0" max="8" step="1" value="${hoursVal}" ${disabled ? 'disabled' : ''} />
               </label>
-              
             </div>
           </div>
         `;
@@ -406,8 +429,6 @@
       el.classList.remove('marked', 'this-code');
       $('.slot-badge', el).textContent = '—';
       changes.set(`${dateStr}|${slot}`, { action: 'clear' });
-
-      // 解除鎖定邏輯交給 onSlotClick 裡的處理（這裡已做基本還原）
     }
 
     function onHoursInput(inp, clamp = false) {
@@ -442,16 +463,14 @@
           amEl.classList.remove('disabled-soft'); pmEl.classList.remove('disabled-soft');
         }
       } else {
-        // 若只選一邊且 v<=4：另一邊維持可點但會被 onSlotClick 鎖住
         const other = amSel ? pmEl : amEl;
-        other.disabled = (v > 0); // 有小時>0 → 鎖另一半天
+        other.disabled = (v > 0);
         other.classList.toggle('disabled-soft', v > 0);
       }
 
       // 小計更新（先扣除舊的 HRS，再加新的）
       const oldH = monthData?.days?.find(d => d.date === dateStr)?.HRS?.hours || 0;
       let subtotal = Number($('#lrMonthSubtotal', modal).textContent || '0');
-      // 舊值（若屬於當前假別才影響小計）
       const hrsCode = monthData?.days?.find(d => d.date === dateStr)?.HRS?.code;
       if (hrsCode === leaveCode) subtotal -= (oldH / 8);
       if (leaveCode) subtotal += (v / 8);
@@ -501,7 +520,7 @@
       try {
         setMsg2('儲存中…');
         await saveAll();
-        await loadAggregate(); // 刷新表格
+        await loadAggregate(); // 刷新表格（當月 + 全年一起更新）
         close();
       } catch (e) {
         console.warn(e);
@@ -562,57 +581,39 @@
     function refreshUI() {
       disp.textContent = (cur === null) ? '' : cur.toFixed(1);
 
-      // 減號啟用規則
       if (base > 0) {
-        // 當前為空 → 不能再減
-        if (cur === null) {
-          btnM.disabled = true;
-        } else {
-          // 大於下限：可減（往下 0.5）
-          // 等於下限：也可減（按一次會「清空」）
-          btnM.disabled = false;
-        }
+        btnM.disabled = (cur === null);
       } else {
-        // base=0：空→不能減；>0 時可減，0.5 再減會清空
         btnM.disabled = (cur === null);
       }
 
-      // 清空鍵：有值才可清
       btnClr.disabled = (cur === null);
     }
 
     btnP.onclick = () => {
       if (cur === null) {
-        // 【修正後】：清空狀態時的第一個 "+" 行為
         if (base > 0) {
-          // 從規定特休開始（例：15.7）
           cur = base;
         } else {
-          // base=0 時仍從 0.5 起跳
           cur = 0.5;
         }
       } else {
-        // 一般微調 +0.5
         cur = Math.round((cur + step) * 2) / 2;
       }
       refreshUI();
     };
 
-
     btnM.onclick = () => {
       if (cur === null) return;
 
       if (base > 0) {
-        // 二段式減法：>base 正常減；==base → 清空
         if (cur > base + EPS) {
           cur = Math.round((cur - step) * 2) / 2;
-          if (cur < base) cur = base; // 保底
+          if (cur < base) cur = base;
         } else {
-          // cur ~ base → 清空
           cur = null;
         }
       } else {
-        // base=0：到 0.5 再減→空值
         const next = Math.round((cur - step) * 2) / 2;
         cur = (next <= 0.5 + EPS) ? null : next;
       }
@@ -647,9 +648,7 @@
     refreshUI();
   }
 
-
-
-  // ---------- 月備註彈窗（沿用，只是讓整格可點） ----------
+  // ---------- 月備註彈窗 ----------
   function openMonthNote(empId, empName, year, month) {
     const modal = document.createElement('div');
     modal.className = 'lr-modal-backdrop';

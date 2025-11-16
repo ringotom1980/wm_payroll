@@ -3,7 +3,7 @@ $PAGE_TITLE = '公司行事曆';
 require __DIR__ . '/../partials/header.php';
 ?>
 <link href="/assets/css/company_calendar.css?v=7" rel="stylesheet">
-<link href="/assets/css/leave_records.css?v=16" rel="stylesheet">
+<link href="/assets/css/leave_records.css?v=17" rel="stylesheet">
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
 <body>
@@ -57,7 +57,7 @@ require __DIR__ . '/../partials/header.php';
             <input id="lrSearch" class="lr-search" type="search" placeholder="搜尋員工姓名…" />
           </div>
         </div>
-
+<div class="lr-legend">＊每一格的第二行為該年度累計天數。</div>
         <div class="lr-table-wrap">
           <table class="lr-table" id="lrTable" aria-describedby="lrHelp">
             <thead>
@@ -93,7 +93,7 @@ require __DIR__ . '/../partials/header.php';
   </div>
 
   <?php require __DIR__ . '/../partials/footer.php'; ?>
-  <script src="/assets/js/company_calendar.js?v=4" defer></script>
-  <script src="/assets/js/leave_records.js?v=15" defer></script>
+  <script src="/assets/js/company_calendar.js?v=5" defer></script>
+  <script src="/assets/js/leave_records.js?v=16" defer></script>
 </body>
 </html>

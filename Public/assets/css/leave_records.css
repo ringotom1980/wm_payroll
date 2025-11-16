@@ -339,3 +339,36 @@
   height:32px; line-height:18px;
 }
 .aa-hint { font-size:12px; color:#6b7280; }
+
+/* === 下區塊：本月 / 全年 雙行數字顯示 === */
+.cell-num.cell-dual {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  line-height: 1.2;
+}
+
+.lr-val-month {
+  display: block;
+  font-size: 13px;          /* 和原本差不多 */
+}
+
+.lr-val-year {
+  display: block;
+  font-size: 11px;
+  color: #6b7280;           /* 灰黑色（第二行） */
+}
+
+/* 可點欄位時，讓上行保持藍色，下行維持灰色 */
+.cell-clickable .lr-val-month {
+  color: #0ea5e9;
+}
+.cell-clickable .lr-val-year {
+  color: #6b7280;
+}
+
+/* 下區塊小字說明 */
+.lr-legend {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0 0 6px;
+}

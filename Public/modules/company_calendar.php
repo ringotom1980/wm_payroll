@@ -93,7 +93,7 @@ require __DIR__ . '/../partials/header.php';
   </div>
 
   <?php require __DIR__ . '/../partials/footer.php'; ?>
-  <script src="/assets/js/company_calendar.js?v=3" defer></script>
+  <script src="/assets/js/company_calendar.js?v=4" defer></script>
   <script src="/assets/js/leave_records.js?v=15" defer></script>
 </body>
 </html>

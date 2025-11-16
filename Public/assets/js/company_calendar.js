@@ -47,18 +47,32 @@
         $('#btnPrevMonth').addEventListener('click', () => {
             let y = state.year, m = state.month - 1;
             if (m < 1) { m = 12; y--; }
-            state.year = y; state.month = m;
-            ySel.value = y; mSel.value = m;
-            loadMonth();
+
+            state.year = y;
+            state.month = m;
+            ySel.value = y;
+            mSel.value = m;
+
+            // 🔔 不再自己叫 loadMonth()
+            //   改成「模擬使用者改 select」，讓所有有綁 change 的地方一起動作
+            ySel.dispatchEvent(new Event('change'));
+            mSel.dispatchEvent(new Event('change'));
         });
 
         $('#btnNextMonth').addEventListener('click', () => {
             let y = state.year, m = state.month + 1;
             if (m > 12) { m = 1; y++; }
-            state.year = y; state.month = m;
-            ySel.value = y; mSel.value = m;
-            loadMonth();
+
+            state.year = y;
+            state.month = m;
+            ySel.value = y;
+            mSel.value = m;
+
+            // 同樣觸發 change
+            ySel.dispatchEvent(new Event('change'));
+            mSel.dispatchEvent(new Event('change'));
         });
+
     }
 
     // ---------- 載入月份 ----------

@@ -116,11 +116,10 @@
             const gov = d.gov_note ? `<span class="gov-note">${escapeHtml(d.gov_note)}</span>` : '';
 
             const notes = Array.isArray(d.user_notes) ? d.user_notes : [];
+            // ✅ 預覽只顯示文字第一行，不顯示時間與置頂
             const notesHtml = notes.map(n => {
-                const time = n.time_hhmm ? `<span class="time-badge">${escapeHtml(n.time_hhmm)}</span>` : '';
                 const firstLine = (n.text || '').split(/\r?\n/)[0];
-                const pin = n.is_pinned ? ' 📌' : '';
-                return `<div class="user-note" data-id="${n.id}">• ${time}${escapeHtml(firstLine)}${pin}</div>`;
+                return `<div class="user-note" data-id="${n.id}">• ${escapeHtml(firstLine)}</div>`;
             }).join('');
 
             const more = d.more_count > 0 ? `<div class="more">+${d.more_count}</div>` : '';
@@ -140,7 +139,8 @@
         });
     }
 
-        // ---------- 彈窗 ----------
+
+    // ---------- 彈窗 ----------
     async function openNotesModal(dateStr) {
         // 從當月資料裡抓到這一天，補上預設值避免 undefined
         const srcDay = (state.monthData?.days || []).find(x => x.date === dateStr) || {};
@@ -163,6 +163,9 @@
             },
             srcDay
         );
+
+        const isGovHoliday = Number(day.gov_is_holiday) === 1;
+        const originalOverride = day.override_type || null;
 
         // 小工具：把 0/1 轉成文字
         const holidayLabel = (isHoliday, isMakeup) => {
@@ -192,12 +195,13 @@
         <div class="cc-override-title">公司設定</div>
         <div class="cc-override-body">
           <div class="cc-override-modes">
-            <label><input type="radio" name="ccOverrideMode" value="FOLLOW"> 照政府</label>
-            <label><input type="radio" name="ccOverrideMode" value="FORCE_HOLIDAY"> 強制休假</label>
-            <label><input type="radio" name="ccOverrideMode" value="FORCE_WORKDAY"> 強制上班</label>
+            <!-- ✅ 文案改成你要的 -->
+            <label><input type="radio" name="ccOverrideMode" value="FOLLOW"> 依政府排定</label>
+            <label><input type="radio" name="ccOverrideMode" value="FORCE_HOLIDAY"> 調整休假</label>
+            <label><input type="radio" name="ccOverrideMode" value="FORCE_WORKDAY"> 調整上班</label>
           </div>
           <div class="cc-override-note">
-            <input type="text" id="ccOverrideNote" placeholder="公司備註（可空白）">
+            <input type="text" id="ccOverrideNote" placeholder="調整原因（可空白）">
             <button class="btn xsm" id="ccOverrideSave">儲存公司設定</button>
           </div>
         </div>
@@ -208,9 +212,8 @@
           <div>新增記事</div>
           <div>
             <textarea id="newNote" class="cc-textarea" placeholder="輸入記事（可多行）"></textarea>
-            <div style="margin-top:6px; display:flex; gap:8px; align-items:center;">
-              <input id="newTime" type="time" style="height:32px;">
-              <label><input id="newPin" type="checkbox"> 置頂</label>
+            <!-- ✅ 拿掉時間 + 置頂，只留新增 -->
+            <div style="margin-top:6px; display:flex; justify-content:flex-end;">
               <button class="btn" id="btnAdd">新增</button>
             </div>
           </div>
@@ -242,9 +245,9 @@
             })();
 
             const companyText = (() => {
-                let base = '公司：照政府';
-                if (day.override_type === 'FORCE_HOLIDAY') base = '公司：強制休假';
-                else if (day.override_type === 'FORCE_WORKDAY') base = '公司：強制上班';
+                let base = '公司：依政府排定';
+                if (day.override_type === 'FORCE_HOLIDAY') base = '公司：調整休假';
+                else if (day.override_type === 'FORCE_WORKDAY') base = '公司：調整上班';
                 const note = day.override_note ? `／${day.override_note}` : '';
                 return `${base}${note}`;
             })();
@@ -262,12 +265,53 @@
         const modeInputs = $$('input[name="ccOverrideMode"]', modal);
         const noteInput = $('#ccOverrideNote', modal);
 
+        // 先從 DB 帶入 override_type 判斷預設模式
         let modeVal = 'FOLLOW';
-        if (day.override_type === 'FORCE_HOLIDAY') modeVal = 'FORCE_HOLIDAY';
-        else if (day.override_type === 'FORCE_WORKDAY') modeVal = 'FORCE_WORKDAY';
+        if (originalOverride === 'FORCE_HOLIDAY') modeVal = 'FORCE_HOLIDAY';
+        else if (originalOverride === 'FORCE_WORKDAY') modeVal = 'FORCE_WORKDAY';
+
+        // ✅ 4 & 5：若現在政府排定和舊設定衝突，只能選「依政府排定」
+        const isConflict =
+            (isGovHoliday && originalOverride === 'FORCE_WORKDAY') ||
+            (!isGovHoliday && originalOverride === 'FORCE_HOLIDAY');
+
+        if (isConflict) {
+            modeVal = 'FOLLOW';
+        }
 
         modeInputs.forEach(r => { r.checked = (r.value === modeVal); });
         noteInput.value = day.override_note || '';
+
+        // ✅ 2 & 3 & 衝突 的 radio disable 邏輯
+        function applyOverrideConstraints() {
+            const rFollow = modeInputs.find(r => r.value === 'FOLLOW');
+            const rHoliday = modeInputs.find(r => r.value === 'FORCE_HOLIDAY');
+            const rWork = modeInputs.find(r => r.value === 'FORCE_WORKDAY');
+
+            // 先全部啟用
+            rFollow.disabled = false;
+            rHoliday.disabled = false;
+            rWork.disabled = false;
+
+            if (isConflict) {
+                // 4、5：衝突時只能選依政府
+                rHoliday.disabled = true;
+                rWork.disabled = true;
+                if (!rFollow.checked) rFollow.checked = true;
+                return;
+            }
+
+            if (isGovHoliday) {
+                // 2) 政府已排休假 → 不能選「調整休假」
+                rHoliday.disabled = true;
+                if (rHoliday.checked) rFollow.checked = true;
+            } else {
+                // 3) 政府非假日 → 不能選「調整上班」
+                rWork.disabled = true;
+                if (rWork.checked) rFollow.checked = true;
+            }
+        }
+        applyOverrideConstraints();
 
         // 儲存公司設定
         $('#ccOverrideSave', modal).onclick = async () => {
@@ -297,15 +341,12 @@
             }
         };
 
-        // ---- 記事列表與 CRUD（沿用你原本的） ----
+        // ---- 記事列表與 CRUD（拿掉時間 / 置頂） ----
         const listEl = $('#notesList', modal);
         const renderList = (arr) => {
             listEl.innerHTML = arr.map(n => `
       <div class="cc-note-item" data-id="${n.id}">
-        <div class="txt">
-          ${n.time_hhmm ? `<span class="time-badge">${escapeHtml(n.time_hhmm)}</span>` : ''}
-          ${escapeHtml(n.text)}
-        </div>
+        <div class="txt">${escapeHtml(n.text)}</div>
         <div class="ops">
           <button class="btn xsm edit">編輯</button>
           <button class="btn xsm danger del">刪除</button>
@@ -317,22 +358,20 @@
         };
         renderList(day.user_notes || []);
 
+        // ✅ 新增記事：只送文字（不送時間、不送置頂）
         $('#btnAdd', modal).onclick = async () => {
             const text = $('#newNote', modal).value.trim();
             if (!text) return setModalMsg('請輸入記事內容', 'error');
-            const time = $('#newTime', modal).value || null;
-            const pin = $('#newPin', modal).checked ? 1 : 0;
             try {
                 await fetchJSON('/api/company_calendar/user_note_add.php', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ date: dateStr, text, time_hhmm: time, is_pinned: pin })
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: dateStr, text })
                 });
                 await loadMonth(); // 簡單作法：重載當月
                 const d2 = (state.monthData?.days || []).find(x => x.date === dateStr);
                 renderList(d2?.user_notes || []);
                 $('#newNote', modal).value = '';
-                $('#newTime', modal).value = '';
-                $('#newPin', modal).checked = false;
                 setModalMsg('已新增', 'success');
             } catch (e) {
                 console.warn(e);
@@ -347,7 +386,8 @@
             if (val === null) return;
             try {
                 await fetchJSON('/api/company_calendar/user_note_update.php', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id, text: val })
                 });
                 await loadMonth();
@@ -364,7 +404,8 @@
             if (!confirm('確定刪除此記事？')) return;
             try {
                 await fetchJSON('/api/company_calendar/user_note_delete.php', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id })
                 });
                 await loadMonth();
@@ -382,10 +423,6 @@
             m.className = `cc-msg ${k}`;
         }
     }
-
-
-
-
 
 
     // ---------- 檔名即時顯示 ----------

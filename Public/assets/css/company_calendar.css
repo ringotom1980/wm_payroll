@@ -3,6 +3,7 @@
   margin-bottom: 16px;
 }
 
+/* 工具列 */
 .cc-toolbar {
   display: flex;
   align-items: center;
@@ -64,22 +65,27 @@
   color: #111827;
 }
 
-/* 按鈕 */
+/* ========= 按鈕 ========= */
 .btn {
   height: 36px;
   padding: 0 12px;
   border: 1px solid #e5e7eb;
   background: #fff;
-  border-radius: 8px;
+  border-radius: 999px;
   cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .btn:hover {
-  background: #f8fafc;
+  background: #f9fafb;
 }
 .btn.primary {
   background: #0ea5e9;
   border-color: #0ea5e9;
   color: #fff;
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.25);
 }
 .btn.primary:hover {
   background: #0284c7;
@@ -95,9 +101,13 @@
 .btn.danger {
   border-color: #fecaca;
   background: #fee2e2;
+  color: #b91c1c;
+}
+.btn.danger:hover {
+  background: #fecaca;
 }
 
-/* 月格 */
+/* ========= 月格 ========= */
 .cc-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -113,6 +123,12 @@
   flex-direction: column;
   gap: 6px;
   cursor: pointer;
+  transition: box-shadow 0.12s ease, transform 0.12s ease, border-color 0.12s ease;
+}
+.cc-day:hover {
+  border-color: #bfdbfe;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
 }
 .cc-day header {
   display: flex;
@@ -126,9 +142,13 @@
   color: #111827;
 }
 
+/* 放假＝淡粉色底；補班日（日曆格子）用淡黃底（給你之後用） */
 .cc-day.holiday {
-  background: #fcf0f4;
-} /* 放假＝粉底 */
+  background: #fef2f2;
+}
+.cc-day.makeup {
+  background: #fffbeb;
+}
 .cc-day.disabled {
   opacity: 0.5;
   pointer-events: none;
@@ -136,11 +156,11 @@
 
 /* 政府節日名（右上角，放假時紅字更顯眼） */
 .gov-note {
-  color: #ef4444;
+  color: #dc2626;
   font-weight: 600;
 }
 
-/* 使用者記事（格子內：最多 2 筆，超量 +N） */
+/* 使用者記事（格子內：前 2 筆 +N） */
 .cc-day .notes {
   display: flex;
   flex-direction: column;
@@ -152,14 +172,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.time-badge {
-  display: inline-block;
-  padding: 1px 6px;
-  border: 1px solid #e5e7eb;
-  border-radius: 999px;
-  font-size: 11px;
-  margin-right: 4px;
 }
 .cc-day .more {
   font-size: 12px;
@@ -179,71 +191,91 @@
   color: #065f46;
 }
 
-/* 簡易彈窗 */
+/* ========== 彈窗 ========== */
 .cc-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(15, 23, 42, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 3000;
 }
 .cc-modal {
-  width: 680px;
-  max-width: 92vw;
-  background: #fff;
+  width: 760px;
+  max-width: 96vw;
+  background: #fdfdfd;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 14px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  padding: 16px 16px 14px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.22);
 }
 .cc-modal header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding-bottom: 8px;
   margin-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
 }
 .cc-modal h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
+  font-weight: 600;
 }
 .cc-modal .body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   max-height: 70vh;
   overflow: auto;
 }
 
+/* 左標籤 / 右內容 */
 .cc-row {
   display: grid;
-  grid-template-columns: 150px 1fr;
+  grid-template-columns: 120px 1fr;
   gap: 10px;
-  align-items: center;
+  align-items: flex-start;
+  font-size: 14px;
+  padding-top: 2px;
+}
+.cc-row > div:first-child {
+  padding-top: 6px;
+  font-weight: 500;
+  color: #4b5563;
 }
 .cc-textarea {
   width: 100%;
-  min-height: 70px;
+  min-height: 90px;
   padding: 8px 10px;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border-radius: 10px;
+  font-size: 13px;
+  resize: vertical;
 }
 
 /* 彈窗清單 */
 #notesList .cc-note-item {
   border: 1px solid #e5e7eb;
   border-radius: 10px;
-  padding: 8px;
+  padding: 8px 10px;
   margin-bottom: 8px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+  background: #fff;
 }
 #notesList .cc-note-item .txt {
   white-space: pre-wrap;
   word-break: break-word;
+}
+#notesList .cc-note-item .ops {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 /* ===== 政府連結樣式 ===== */
@@ -255,7 +287,7 @@
   border: 1px solid #bae6fd;
   background: #e0f2fe;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: 999px;
   transition: all 0.2s ease;
 }
 .gov-link:hover {
@@ -264,9 +296,9 @@
   text-decoration: underline;
 }
 
-/* 彈窗內：政府 / 公司 / 實際 三行標籤 */
+/* ========= 彈窗內：政府 / 公司 / 實際 三行標籤 ========= */
 .cc-flags {
-  margin: 8px 0 12px;
+  margin: 4px 0 10px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -274,27 +306,27 @@
 }
 
 .cc-flag {
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
   background: #f9fafb;
 }
 
 .cc-flag.gov {
-  border-left: 3px solid #3b82f6; /* 藍：政府 */
+  border-left: 4px solid #3b82f6; /* 藍：政府 */
 }
 
 .cc-flag.company {
-  border-left: 3px solid #10b981; /* 綠：公司設定 */
+  border-left: 4px solid #10b981; /* 綠：公司設定 */
 }
 
 .cc-flag.final {
-  border-left: 3px solid #f97316; /* 橘：實際結果 */
+  border-left: 4px solid #f97316; /* 橘：實際結果 */
   font-weight: 600;
 }
 
-/* 公司設定區 */
+/* ========= 公司設定區 ========= */
 .cc-override-row {
-  margin: 4px 0 10px;
+  margin: 2px 0 12px;
   display: flex;
   gap: 8px;
   align-items: flex-start;
@@ -303,20 +335,39 @@
 
 .cc-override-title {
   width: 70px;
-  padding-top: 4px;
+  padding-top: 6px;
   color: #4b5563;
+  font-weight: 500;
 }
 
 .cc-override-body {
   flex: 1;
 }
 
+.cc-override-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
 .cc-override-modes label {
-  margin-right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.cc-override-modes input {
+  width: 14px;
+  height: 14px;
+}
+.cc-override-modes input[disabled] {
+  cursor: not-allowed;
+}
+.cc-override-modes input[disabled] + span {
+  color: #9ca3af;
 }
 
 .cc-override-note {
-  margin-top: 4px;
+  margin-top: 6px;
   display: flex;
   gap: 8px;
 }
@@ -325,7 +376,18 @@
   flex: 1;
   height: 32px;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid #e5e7eb;
   font-size: 13px;
+  background: #fff;
+}
+
+/* 讓儲存公司設定的小按鈕看起來像你的草圖 */
+#ccOverrideSave.btn.xsm {
+  border-radius: 999px;
+}
+
+/* 讓彈窗最下方訊息收斂一點距離 */
+#ccModalMsg {
+  margin-top: 4px;
 }

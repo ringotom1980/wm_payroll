@@ -387,6 +387,17 @@
   text-decoration: underline;
 }
 
+.cc-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cc-header-actions .btn.primary {
+  height: 32px;
+  padding: 0 14px;
+}
+
 
 /* ========= 彈窗內：政府 / 公司 / 實際 三行標籤 ========= */
 .cc-flags {

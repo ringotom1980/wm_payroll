@@ -177,9 +177,13 @@
         modal.innerHTML = `
     <div class="cc-modal" role="dialog" aria-modal="true" aria-label="公司行事曆設定">
       <header class="cc-modal-header">
-        <h3>${dateStr}</h3>
-        <button class="btn" id="ccClose">關閉</button>
-      </header>
+  <h3>${dateStr}</h3>
+  <div class="cc-header-actions">
+    <button class="btn primary" id="ccOverrideSave">儲存</button>
+    <button class="btn" id="ccClose">關閉</button>
+  </div>
+</header>
+
 
       <div class="cc-modal-body">
         <!-- 上半：目前排定 + 公司設定 -->
@@ -211,9 +215,7 @@
             <div class="cc-adjust-reason">
               <div class="cc-adjust-reason-label">調整原因</div>
               <textarea id="ccOverrideNote" placeholder="輸入原因（可空白）"></textarea>
-              <div class="cc-adjust-actions">
-                <button class="btn primary" id="ccOverrideSave">儲存公司設定</button>
-              </div>
+              
             </div>
           </div>
         </section>

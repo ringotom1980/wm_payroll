@@ -263,3 +263,31 @@
   color: #0369a1;
   text-decoration: underline;
 }
+
+/* 彈窗內：政府 / 公司 / 實際 三行標籤 */
+.cc-flags {
+  margin: 8px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.cc-flag {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #f9fafb;
+}
+
+.cc-flag.gov {
+  border-left: 3px solid #3b82f6; /* 藍：政府 */
+}
+
+.cc-flag.company {
+  border-left: 3px solid #10b981; /* 綠：公司設定 */
+}
+
+.cc-flag.final {
+  border-left: 3px solid #f97316; /* 橘：實際結果 */
+  font-weight: 600;
+}

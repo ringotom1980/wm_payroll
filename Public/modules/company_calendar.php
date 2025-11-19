@@ -2,7 +2,7 @@
 $PAGE_TITLE = '公司行事曆';
 require __DIR__ . '/../partials/header.php';
 ?>
-<link href="/assets/css/company_calendar.css?v=7" rel="stylesheet">
+<link href="/assets/css/company_calendar.css?v=8" rel="stylesheet">
 <link href="/assets/css/leave_records.css?v=17" rel="stylesheet">
 <link rel="icon" type="image/png" href="/assets/img/WM-logo.png" sizes="32x32">
 </head>
@@ -93,7 +93,7 @@ require __DIR__ . '/../partials/header.php';
   </div>
 
   <?php require __DIR__ . '/../partials/footer.php'; ?>
-  <script src="/assets/js/company_calendar.js?v=5" defer></script>
+  <script src="/assets/js/company_calendar.js?v=6" defer></script>
   <script src="/assets/js/leave_records.js?v=16" defer></script>
 </body>
 </html>

@@ -140,18 +140,71 @@
         });
     }
 
-    // ---------- 彈窗 ----------
+        // ---------- 彈窗 ----------
     async function openNotesModal(dateStr) {
-        const day = (state.monthData?.days || []).find(x => x.date === dateStr) || { user_notes: [], gov_note: null, more_count: 0 };
+        // 從當月資料裡抓到這一天，補上預設值避免 undefined
+        const srcDay = (state.monthData?.days || []).find(x => x.date === dateStr) || {};
+        const day = Object.assign(
+            {
+                date: dateStr,
+                // 政府原始
+                gov_is_holiday: 0,
+                gov_is_makeup_workday: 0,
+                gov_note: null,
+                // 公司覆寫
+                override_type: null,      // null / 'FORCE_HOLIDAY' / 'FORCE_WORKDAY'
+                override_note: null,
+                // 最終結果（已套用 override）
+                is_holiday: 0,
+                is_makeup_workday: 0,
+                // 使用者記事
+                user_notes: [],
+                more_count: 0,
+            },
+            srcDay
+        );
+
+        // 小工具：把 0/1 轉成文字
+        const holidayLabel = (isHoliday, isMakeup) => {
+            if (Number(isHoliday) === 1) {
+                return isMakeup ? '休假（補班日）' : '休假';
+            }
+            return isMakeup ? '上班（補班）' : '上班日';
+        };
+
+        // 政府行事曆說明
+        const govText = (() => {
+            const base = holidayLabel(day.gov_is_holiday, day.gov_is_makeup_workday);
+            const note = day.gov_note ? `／${day.gov_note}` : '';
+            return `政府：${base}${note}`;
+        })();
+
+        // 公司覆寫說明
+        const companyText = (() => {
+            let base = '照政府';
+            if (day.override_type === 'FORCE_HOLIDAY') base = '公司：強制休假';
+            else if (day.override_type === 'FORCE_WORKDAY') base = '公司：強制上班';
+            else base = '公司：照政府';
+            const note = day.override_note ? `／${day.override_note}` : '';
+            return `${base}${note}`;
+        })();
+
+        // 最終結果說明（實際在月曆上判斷用的旗標）
+        const finalText = `實際：${holidayLabel(day.is_holiday, day.is_makeup_workday)}`;
 
         const modal = document.createElement('div');
         modal.className = 'cc-modal-backdrop';
         modal.innerHTML = `
     <div class="cc-modal" role="dialog" aria-modal="true" aria-label="當日記事">
       <header>
-        <h3>${dateStr}${day.gov_note ? `　<span class="gov-note">${escapeHtml(day.gov_note)}</span>` : ''}</h3>
+        <h3>${dateStr}</h3>
         <button class="btn" id="ccClose">關閉</button>
       </header>
+      <div class="cc-flags">
+        <div class="cc-flag gov">${escapeHtml(govText)}</div>
+        <div class="cc-flag company">${escapeHtml(companyText)}</div>
+        <div class="cc-flag final">${escapeHtml(finalText)}</div>
+      </div>
       <div class="body">
         <div class="cc-row">
           <div>新增記事</div>
@@ -182,7 +235,10 @@
         const renderList = (arr) => {
             listEl.innerHTML = arr.map(n => `
       <div class="cc-note-item" data-id="${n.id}">
-        <div class="txt">${n.time_hhmm ? `<span class="time-badge">${escapeHtml(n.time_hhmm)}</span>` : ''}${escapeHtml(n.text)}</div>
+        <div class="txt">
+          ${n.time_hhmm ? `<span class="time-badge">${escapeHtml(n.time_hhmm)}</span>` : ''}
+          ${escapeHtml(n.text)}
+        </div>
         <div class="ops">
           <button class="btn xsm edit">編輯</button>
           <button class="btn xsm danger del">刪除</button>
@@ -192,7 +248,7 @@
             $$('.cc-note-item .edit', listEl).forEach(btn => btn.onclick = () => editNote(btn.closest('.cc-note-item')));
             $$('.cc-note-item .del', listEl).forEach(btn => btn.onclick = () => deleteNote(btn.closest('.cc-note-item')));
         };
-        renderList(day.user_notes);
+        renderList(day.user_notes || []);
 
         $('#btnAdd', modal).onclick = async () => {
             const text = $('#newNote', modal).value.trim();
@@ -204,12 +260,17 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ date: dateStr, text, time_hhmm: time, is_pinned: pin })
                 });
-                await loadMonth(); // 簡單做法：重載當月
+                await loadMonth(); // 簡單作法：重載當月
                 const d2 = (state.monthData?.days || []).find(x => x.date === dateStr);
                 renderList(d2?.user_notes || []);
-                $('#newNote', modal).value = ''; $('#newTime', modal).value = ''; $('#newPin', modal).checked = false;
+                $('#newNote', modal).value = '';
+                $('#newTime', modal).value = '';
+                $('#newPin', modal).checked = false;
                 setModalMsg('已新增', 'success');
-            } catch (e) { console.warn(e); setModalMsg('新增失敗', 'error'); }
+            } catch (e) {
+                console.warn(e);
+                setModalMsg('新增失敗', 'error');
+            }
         };
 
         async function editNote(row) {
@@ -225,7 +286,10 @@
                 await loadMonth();
                 const d2 = (state.monthData?.days || []).find(x => x.date === dateStr);
                 renderList(d2?.user_notes || []);
-            } catch (e) { console.warn(e); setModalMsg('更新失敗', 'error'); }
+            } catch (e) {
+                console.warn(e);
+                setModalMsg('更新失敗', 'error');
+            }
         }
 
         async function deleteNote(row) {
@@ -239,17 +303,19 @@
                 await loadMonth();
                 const d2 = (state.monthData?.days || []).find(x => x.date === dateStr);
                 renderList(d2?.user_notes || []);
-            } catch (e) { console.warn(e); setModalMsg('刪除失敗', 'error'); }
+            } catch (e) {
+                console.warn(e);
+                setModalMsg('刪除失敗', 'error');
+            }
         }
 
-        function setModalMsg(t, k = '') { const m = $('#ccModalMsg', modal); m.textContent = t || ''; m.className = `cc-msg ${k}`; }
+        function setModalMsg(t, k = '') {
+            const m = $('#ccModalMsg', modal);
+            m.textContent = t || '';
+            m.className = `cc-msg ${k}`;
+        }
     }
 
-
-    async function reloadDay(dateStr) {
-        // 簡單作法：重載當月（你已有 loadMonth）
-        await loadMonth();
-    }
 
 
 

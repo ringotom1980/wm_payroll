@@ -107,7 +107,7 @@
   background: #fecaca;
 }
 
-/* ========= 月格 ========= */
+/* 月格 */
 .cc-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -123,12 +123,6 @@
   flex-direction: column;
   gap: 6px;
   cursor: pointer;
-  transition: box-shadow 0.12s ease, transform 0.12s ease, border-color 0.12s ease;
-}
-.cc-day:hover {
-  border-color: #bfdbfe;
-  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
-  transform: translateY(-1px);
 }
 .cc-day header {
   display: flex;
@@ -142,25 +136,24 @@
   color: #111827;
 }
 
-/* 放假＝淡粉色底；補班日（日曆格子）用淡黃底（給你之後用） */
 .cc-day.holiday {
-  background: #fef2f2;
+  background: #fef2f2; /* 放假：淡粉紅 */
 }
 .cc-day.makeup {
-  background: #fffbeb;
+  box-shadow: inset 0 0 0 1px #bfdbfe; /* 補班：淡藍框 */
 }
 .cc-day.disabled {
   opacity: 0.5;
   pointer-events: none;
 }
 
-/* 政府節日名（右上角，放假時紅字更顯眼） */
+/* 政府節日名（右上角） */
 .gov-note {
-  color: #dc2626;
+  color: #ef4444;
   font-weight: 600;
 }
 
-/* 使用者記事（格子內：前 2 筆 +N） */
+/* 使用者記事（格子內：最多 2 筆，超量 +N） */
 .cc-day .notes {
   display: flex;
   flex-direction: column;
@@ -191,7 +184,7 @@
   color: #065f46;
 }
 
-/* ========== 彈窗 ========== */
+/* ===== 簡易彈窗 ===== */
 .cc-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -202,80 +195,178 @@
   z-index: 3000;
 }
 .cc-modal {
-  width: 760px;
+  width: 820px;
   max-width: 96vw;
-  background: #fdfdfd;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  padding: 16px 16px 14px;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.22);
+  background: #f8fafc;
+  border: 1px solid #cbd5f5;
+  border-radius: 24px;
+  padding: 18px 20px 20px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.25);
 }
-.cc-modal header {
+.cc-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 8px;
   margin-bottom: 8px;
-  border-bottom: 1px solid #e5e7eb;
 }
 .cc-modal h3 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  color: #0f172a;
 }
-.cc-modal .body {
+.cc-modal-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  max-height: 70vh;
+  gap: 18px;
+  max-height: 72vh;
   overflow: auto;
 }
 
-/* 左標籤 / 右內容 */
-.cc-row {
+/* 上半：目前排定 + 公司設定 */
+.cc-top-box {
+  border-radius: 18px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  padding: 16px 20px 18px;
+}
+.cc-top-title {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 10px;
+}
+.cc-status-grid {
   display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+.cc-status {
+  padding-left: 10px;
+  padding-right: 4px;
+}
+.cc-status .label {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+.cc-status .value {
+  font-weight: 600;
+  color: #111827;
+}
+
+/* 左邊彩色線（對應你畫的三條） */
+.cc-status-gov {
+  border-left: 4px solid #3b82f6; /* 藍：政府 */
+}
+.cc-status-company {
+  border-left: 4px solid #10b981; /* 綠：公司 */
+}
+.cc-status-final {
+  border-left: 4px solid #f97316; /* 橘：實際結果 */
+}
+
+.cc-adjust-title {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 6px 0 8px;
+}
+.cc-adjust-grid {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 12px;
   align-items: flex-start;
   font-size: 14px;
-  padding-top: 2px;
 }
-.cc-row > div:first-child {
-  padding-top: 6px;
-  font-weight: 500;
-  color: #4b5563;
+.cc-adjust-modes label {
+  display: block;
+  margin-bottom: 6px;
+  color: #111827;
 }
-.cc-textarea {
+.cc-adjust-modes input[type="radio"] {
+  margin-right: 4px;
+}
+.cc-adjust-reason-label {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+#ccOverrideNote {
   width: 100%;
-  min-height: 90px;
+  min-height: 80px;
   padding: 8px 10px;
-  border: 1px solid #e5e7eb;
   border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
   font-size: 13px;
   resize: vertical;
 }
+.cc-adjust-actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
 
-/* 彈窗清單 */
+/* 下半：新增記事 / 所有記事 */
+.cc-notes-box {
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  padding: 14px 16px 12px;
+}
+.cc-notes-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.cc-notes-col {
+  display: flex;
+  flex-direction: column;
+}
+.cc-notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.cc-notes-header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+.cc-textarea,
+#newNote {
+  width: 100%;
+  min-height: 120px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  font-size: 13px;
+  background: #ffffff;
+}
+
+/* 彈窗內記事清單 */
 #notesList .cc-note-item {
   border: 1px solid #e5e7eb;
   border-radius: 10px;
-  padding: 8px 10px;
+  padding: 8px;
   margin-bottom: 8px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  background: #fff;
+  background: #f9fafb;
 }
 #notesList .cc-note-item .txt {
   white-space: pre-wrap;
   word-break: break-word;
-}
-#notesList .cc-note-item .ops {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  font-size: 13px;
 }
 
 /* ===== 政府連結樣式 ===== */
@@ -287,7 +378,7 @@
   border: 1px solid #bae6fd;
   background: #e0f2fe;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: 6px;
   transition: all 0.2s ease;
 }
 .gov-link:hover {
@@ -295,6 +386,7 @@
   color: #0369a1;
   text-decoration: underline;
 }
+
 
 /* ========= 彈窗內：政府 / 公司 / 實際 三行標籤 ========= */
 .cc-flags {

@@ -53,8 +53,6 @@
             ySel.value = y;
             mSel.value = m;
 
-            // 🔔 不再自己叫 loadMonth()
-            //   改成「模擬使用者改 select」，讓所有有綁 change 的地方一起動作
             ySel.dispatchEvent(new Event('change'));
             mSel.dispatchEvent(new Event('change'));
         });
@@ -68,7 +66,6 @@
             ySel.value = y;
             mSel.value = m;
 
-            // 同樣觸發 change
             ySel.dispatchEvent(new Event('change'));
             mSel.dispatchEvent(new Event('change'));
         });
@@ -84,7 +81,13 @@
             // 預期回傳：
             // {
             //   days: [
-            //     { date:'YYYY-MM-DD', is_holiday:0/1, is_makeup_workday:0/1, note:'', events:[{id,category,title,remark,source}] },
+            //     {
+            //       date:'YYYY-MM-DD',
+            //       gov_is_holiday, gov_is_makeup_workday, gov_note,
+            //       override_type, override_note,
+            //       is_holiday, is_makeup_workday,
+            //       user_notes:[...], more_count
+            //     },
             //     ...
             //   ],
             //   firstWeekday: 0-6 (週日=0),
@@ -116,7 +119,6 @@
             const gov = d.gov_note ? `<span class="gov-note">${escapeHtml(d.gov_note)}</span>` : '';
 
             const notes = Array.isArray(d.user_notes) ? d.user_notes : [];
-            // ✅ 預覽只顯示文字第一行，不顯示時間與置頂
             const notesHtml = notes.map(n => {
                 const firstLine = (n.text || '').split(/\r?\n/)[0];
                 return `<div class="user-note" data-id="${n.id}">• ${escapeHtml(firstLine)}</div>`;
@@ -135,14 +137,20 @@
         wrap.innerHTML = blanks + days;
 
         $$('.cc-day[data-date]').forEach(el => {
-            el.addEventListener('click', () => openNotesModal(el.getAttribute('data-date')));
+            el.addEventListener('click', () => openDayModal(el.getAttribute('data-date')));
         });
     }
 
+    // ---------- 小工具：0/1 → 文字 ----------
+    function holidayLabel(isHoliday, isMakeup) {
+        const h = Number(isHoliday) === 1;
+        const m = Number(isMakeup) === 1;
+        if (h) return m ? '休假（補班日）' : '休假';
+        return m ? '上班（補班）' : '上班日';
+    }
 
     // ---------- 彈窗 ----------
-    async function openNotesModal(dateStr) {
-        // 從當月資料裡抓到這一天，補上預設值避免 undefined
+    async function openDayModal(dateStr) {
         const srcDay = (state.monthData?.days || []).find(x => x.date === dateStr) || {};
         const day = Object.assign(
             {
@@ -154,105 +162,111 @@
                 // 公司覆寫
                 override_type: null,      // null / 'FORCE_HOLIDAY' / 'FORCE_WORKDAY'
                 override_note: null,
-                // 最終結果（已套用 override）
+                // 最終結果
                 is_holiday: 0,
                 is_makeup_workday: 0,
-                // 使用者記事
+                // 記事
                 user_notes: [],
                 more_count: 0,
             },
             srcDay
         );
 
-        const isGovHoliday = Number(day.gov_is_holiday) === 1;
-        const originalOverride = day.override_type || null;
-
-        // 小工具：把 0/1 轉成文字
-        const holidayLabel = (isHoliday, isMakeup) => {
-            if (Number(isHoliday) === 1) {
-                return isMakeup ? '休假（補班日）' : '休假';
-            }
-            return isMakeup ? '上班（補班）' : '上班日';
-        };
-
-        // 建立彈窗 DOM
         const modal = document.createElement('div');
         modal.className = 'cc-modal-backdrop';
         modal.innerHTML = `
-    <div class="cc-modal" role="dialog" aria-modal="true" aria-label="當日記事">
-      <header>
+    <div class="cc-modal" role="dialog" aria-modal="true" aria-label="公司行事曆設定">
+      <header class="cc-modal-header">
         <h3>${dateStr}</h3>
         <button class="btn" id="ccClose">關閉</button>
       </header>
 
-      <div class="cc-flags">
-        <div class="cc-flag gov"><span id="ccFlagGov"></span></div>
-        <div class="cc-flag company"><span id="ccFlagCompany"></span></div>
-        <div class="cc-flag final"><span id="ccFlagFinal"></span></div>
-      </div>
-
-      <div class="cc-override-row">
-        <div class="cc-override-title">公司設定</div>
-        <div class="cc-override-body">
-          <div class="cc-override-modes">
-            <!-- ✅ 文案改成你要的 -->
-            <label><input type="radio" name="ccOverrideMode" value="FOLLOW"> 依政府排定</label>
-            <label><input type="radio" name="ccOverrideMode" value="FORCE_HOLIDAY"> 調整休假</label>
-            <label><input type="radio" name="ccOverrideMode" value="FORCE_WORKDAY"> 調整上班</label>
-          </div>
-          <div class="cc-override-note">
-            <input type="text" id="ccOverrideNote" placeholder="調整原因（可空白）">
-            <button class="btn xsm" id="ccOverrideSave">儲存公司設定</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="body">
-        <div class="cc-row">
-          <div>新增記事</div>
-          <div>
-            <textarea id="newNote" class="cc-textarea" placeholder="輸入記事（可多行）"></textarea>
-            <!-- ✅ 拿掉時間 + 置頂，只留新增 -->
-            <div style="margin-top:6px; display:flex; justify-content:flex-end;">
-              <button class="btn" id="btnAdd">新增</button>
+      <div class="cc-modal-body">
+        <!-- 上半：目前排定 + 公司設定 -->
+        <section class="cc-top-box">
+          <div class="cc-top-title">目前排定</div>
+          <div class="cc-status-grid">
+            <div class="cc-status cc-status-gov">
+              <div class="label">政府排定：</div>
+              <div class="value" id="ccFlagGov"></div>
+            </div>
+            <div class="cc-status cc-status-company">
+              <div class="label">公司排定：</div>
+              <div class="value" id="ccFlagCompany"></div>
+            </div>
+            <div class="cc-status cc-status-final">
+              <div class="label">實際排定：</div>
+              <div class="value" id="ccFlagFinal"></div>
             </div>
           </div>
-        </div>
-        <div class="cc-row" style="align-items:flex-start;">
-          <div>所有記事</div>
-          <div>
-            <div id="notesList"></div>
-            ${day.more_count ? `<div class="cc-msg">${day.more_count} 筆未顯示（月視圖只顯示前 2 筆）</div>` : ''}
+
+          <div class="cc-adjust-title">調整休假或上班</div>
+
+          <div class="cc-adjust-grid">
+            <div class="cc-adjust-modes">
+              <label><input type="radio" name="ccOverrideMode" value="FOLLOW"> 依政府排定</label>
+              <label><input type="radio" name="ccOverrideMode" value="FORCE_HOLIDAY"> 調整休假</label>
+              <label><input type="radio" name="ccOverrideMode" value="FORCE_WORKDAY"> 調整上班</label>
+            </div>
+            <div class="cc-adjust-reason">
+              <div class="cc-adjust-reason-label">調整原因</div>
+              <textarea id="ccOverrideNote" placeholder="輸入原因（可空白）"></textarea>
+              <div class="cc-adjust-actions">
+                <button class="btn primary" id="ccOverrideSave">儲存公司設定</button>
+              </div>
+            </div>
           </div>
-        </div>
-        <div id="ccModalMsg" class="cc-msg"></div>
+        </section>
+
+        <!-- 下半：記事 -->
+        <section class="cc-notes-box">
+          <div class="cc-notes-grid">
+            <div class="cc-notes-col">
+              <div class="cc-notes-header">
+                <h4>新增記事</h4>
+                <button class="btn primary" id="btnAdd">新增</button>
+              </div>
+              <textarea id="newNote" class="cc-textarea" placeholder="輸入記事（可多行）"></textarea>
+            </div>
+
+            <div class="cc-notes-col">
+              <div class="cc-notes-header">
+                <h4>所有記事</h4>
+              </div>
+              <div id="notesList"></div>
+              ${day.more_count ? `<div class="cc-msg">${day.more_count} 筆未顯示（月視圖只顯示前 2 筆）</div>` : ''}
+            </div>
+          </div>
+
+          <div id="ccModalMsg" class="cc-msg"></div>
+        </section>
       </div>
     </div>
   `;
         document.body.appendChild(modal);
         $('#ccClose', modal).onclick = () => modal.remove();
 
+        // ---- 目前排定三行文字 ----
         const flagGovEl = $('#ccFlagGov', modal);
         const flagCompanyEl = $('#ccFlagCompany', modal);
         const flagFinalEl = $('#ccFlagFinal', modal);
 
-        // 依 day 內容重算三行文字
         function refreshFlags() {
             const govText = (() => {
                 const base = holidayLabel(day.gov_is_holiday, day.gov_is_makeup_workday);
                 const note = day.gov_note ? `／${day.gov_note}` : '';
-                return `政府：${base}${note}`;
+                return `${base}${note}`;
             })();
 
             const companyText = (() => {
-                let base = '公司：依政府排定';
-                if (day.override_type === 'FORCE_HOLIDAY') base = '公司：調整休假';
-                else if (day.override_type === 'FORCE_WORKDAY') base = '公司：調整上班';
+                let base = '依政府排定';
+                if (day.override_type === 'FORCE_HOLIDAY') base = '調整休假';
+                else if (day.override_type === 'FORCE_WORKDAY') base = '調整上班';
                 const note = day.override_note ? `／${day.override_note}` : '';
                 return `${base}${note}`;
             })();
 
-            const finalText = `實際：${holidayLabel(day.is_holiday, day.is_makeup_workday)}`;
+            const finalText = holidayLabel(day.is_holiday, day.is_makeup_workday);
 
             flagGovEl.textContent = govText;
             flagCompanyEl.textContent = companyText;
@@ -261,59 +275,37 @@
 
         refreshFlags();
 
-        // ---- 初始化公司設定區（radio + 備註） ----
+        // ---- 公司設定 radio + 調整原因 ----
         const modeInputs = $$('input[name="ccOverrideMode"]', modal);
         const noteInput = $('#ccOverrideNote', modal);
 
-        // 先從 DB 帶入 override_type 判斷預設模式
-        let modeVal = 'FOLLOW';
-        if (originalOverride === 'FORCE_HOLIDAY') modeVal = 'FORCE_HOLIDAY';
-        else if (originalOverride === 'FORCE_WORKDAY') modeVal = 'FORCE_WORKDAY';
+        function syncModeFromDay() {
+            let modeVal = 'FOLLOW';
+            if (day.override_type === 'FORCE_HOLIDAY') modeVal = 'FORCE_HOLIDAY';
+            else if (day.override_type === 'FORCE_WORKDAY') modeVal = 'FORCE_WORKDAY';
 
-        // ✅ 4 & 5：若現在政府排定和舊設定衝突，只能選「依政府排定」
-        const isConflict =
-            (isGovHoliday && originalOverride === 'FORCE_WORKDAY') ||
-            (!isGovHoliday && originalOverride === 'FORCE_HOLIDAY');
+            const govHoliday = Number(day.gov_is_holiday) === 1;
 
-        if (isConflict) {
-            modeVal = 'FOLLOW';
+            modeInputs.forEach(r => {
+                r.checked = (r.value === modeVal);
+                r.disabled = false;
+
+                // 規則：
+                // 2) 原本政府已經排定休假時，「調整休假」不能被新選
+                if (r.value === 'FORCE_HOLIDAY' && govHoliday && day.override_type !== 'FORCE_HOLIDAY') {
+                    r.disabled = true;
+                }
+                // 3) 原本政府已排定非假日時，「調整上班」不能被新選
+                if (r.value === 'FORCE_WORKDAY' && !govHoliday && day.override_type !== 'FORCE_WORKDAY') {
+                    r.disabled = true;
+                }
+            });
+
+            noteInput.value = day.override_note || '';
         }
 
-        modeInputs.forEach(r => { r.checked = (r.value === modeVal); });
-        noteInput.value = day.override_note || '';
+        syncModeFromDay();
 
-        // ✅ 2 & 3 & 衝突 的 radio disable 邏輯
-        function applyOverrideConstraints() {
-            const rFollow = modeInputs.find(r => r.value === 'FOLLOW');
-            const rHoliday = modeInputs.find(r => r.value === 'FORCE_HOLIDAY');
-            const rWork = modeInputs.find(r => r.value === 'FORCE_WORKDAY');
-
-            // 先全部啟用
-            rFollow.disabled = false;
-            rHoliday.disabled = false;
-            rWork.disabled = false;
-
-            if (isConflict) {
-                // 4、5：衝突時只能選依政府
-                rHoliday.disabled = true;
-                rWork.disabled = true;
-                if (!rFollow.checked) rFollow.checked = true;
-                return;
-            }
-
-            if (isGovHoliday) {
-                // 2) 政府已排休假 → 不能選「調整休假」
-                rHoliday.disabled = true;
-                if (rHoliday.checked) rFollow.checked = true;
-            } else {
-                // 3) 政府非假日 → 不能選「調整上班」
-                rWork.disabled = true;
-                if (rWork.checked) rFollow.checked = true;
-            }
-        }
-        applyOverrideConstraints();
-
-        // 儲存公司設定
         $('#ccOverrideSave', modal).onclick = async () => {
             const sel = modeInputs.find(r => r.checked);
             const mode = sel ? sel.value : 'FOLLOW';
@@ -326,27 +318,26 @@
                     body: JSON.stringify({ date: dateStr, mode, note })
                 });
 
-                // 重新載入當月，拿到最新 day 資料
+                // 重新載入當月，拿最新 day
                 await loadMonth();
                 const d2 = (state.monthData?.days || []).find(x => x.date === dateStr) || {};
-
-                // 更新本地 day 物件（讓旗標文字/顏色跟著變）
                 Object.assign(day, d2);
                 refreshFlags();
-
-                setModalMsg('公司設定已儲存', 'success');
+                syncModeFromDay();
+                setModalMsg('公司設定已儲存', 'success', modal);
             } catch (e) {
                 console.warn(e);
-                setModalMsg('公司設定儲存失敗', 'error');
+                setModalMsg('公司設定儲存失敗', 'error', modal);
             }
         };
 
-        // ---- 記事列表與 CRUD（拿掉時間 / 置頂） ----
+        // ---- 記事列表 CRUD（已拿掉時間 / 置頂） ----
         const listEl = $('#notesList', modal);
+
         const renderList = (arr) => {
             listEl.innerHTML = arr.map(n => `
       <div class="cc-note-item" data-id="${n.id}">
-        <div class="txt">${escapeHtml(n.text)}</div>
+        <div class="txt">${escapeHtml(n.text || '')}</div>
         <div class="ops">
           <button class="btn xsm edit">編輯</button>
           <button class="btn xsm danger del">刪除</button>
@@ -358,24 +349,24 @@
         };
         renderList(day.user_notes || []);
 
-        // ✅ 新增記事：只送文字（不送時間、不送置頂）
         $('#btnAdd', modal).onclick = async () => {
             const text = $('#newNote', modal).value.trim();
-            if (!text) return setModalMsg('請輸入記事內容', 'error');
+            if (!text) return setModalMsg('請輸入記事內容', 'error', modal);
+
             try {
                 await fetchJSON('/api/company_calendar/user_note_add.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ date: dateStr, text })
+                    body: JSON.stringify({ date: dateStr, text, time_hhmm: null, is_pinned: 0 })
                 });
-                await loadMonth(); // 簡單作法：重載當月
+                await loadMonth();
                 const d2 = (state.monthData?.days || []).find(x => x.date === dateStr);
                 renderList(d2?.user_notes || []);
                 $('#newNote', modal).value = '';
-                setModalMsg('已新增', 'success');
+                setModalMsg('已新增', 'success', modal);
             } catch (e) {
                 console.warn(e);
-                setModalMsg('新增失敗', 'error');
+                setModalMsg('新增失敗', 'error', modal);
             }
         };
 
@@ -395,7 +386,7 @@
                 renderList(d2?.user_notes || []);
             } catch (e) {
                 console.warn(e);
-                setModalMsg('更新失敗', 'error');
+                setModalMsg('更新失敗', 'error', modal);
             }
         }
 
@@ -413,17 +404,17 @@
                 renderList(d2?.user_notes || []);
             } catch (e) {
                 console.warn(e);
-                setModalMsg('刪除失敗', 'error');
+                setModalMsg('刪除失敗', 'error', modal);
             }
-        }
-
-        function setModalMsg(t, k = '') {
-            const m = $('#ccModalMsg', modal);
-            m.textContent = t || '';
-            m.className = `cc-msg ${k}`;
         }
     }
 
+    function setModalMsg(t, k = '', modal) {
+        const m = modal ? $('#ccModalMsg', modal) : $('#ccModalMsg');
+        if (!m) return;
+        m.textContent = t || '';
+        m.className = `cc-msg ${k}`;
+    }
 
     // ---------- 檔名即時顯示 ----------
     (() => {
@@ -431,7 +422,6 @@
         const nameEl = $('#ccCsvName');
         if (!fileInput || !nameEl) return;
 
-        // 初始狀態
         nameEl.textContent = '未選擇檔案';
         nameEl.classList.remove('has-file');
 
@@ -442,28 +432,23 @@
         });
     })();
 
-
     // ---------- 匯入 CSV ----------
     $('#btnImportCsv')?.addEventListener('click', async () => {
         const file = $('#ccCsvFile')?.files?.[0];
         if (!file) { setMsg('請先選擇 CSV 檔案', 'error'); return; }
 
-        // 簡單副檔名檢查
         if (!file.name.toLowerCase().endsWith('.csv')) {
             setMsg('僅接受 .csv 檔案', 'error'); return;
         }
 
-        // 交由後端逐行驗證（行號錯誤回報）
         try {
             setMsg('匯入中…');
             const fd = new FormData();
             fd.append('file', file);
             const res = await fetchJSON('/api/company_calendar/import_csv.php', { method: 'POST', body: fd });
-            // 預期 res = { ok: true, year, month, errors?: [ "CSV 第 12 行：日期格式錯誤（需 YYYY-MM-DD）", ... ] }
             if (res.errors && res.errors.length) {
                 setMsg(res.errors.join('；'), 'error');
             } else {
-                // 匯入成功：刷新目前檢視之年/月（或依回傳 res.year/month）
                 await loadMonth();
                 setMsg('匯入完成', 'success');
             }
@@ -473,7 +458,7 @@
         } finally {
             const fi = $('#ccCsvFile');
             const nameEl = $('#ccCsvName');
-            if (fi) fi.value = ''; // 避免同名檔案不觸發 change
+            if (fi) fi.value = '';
             if (nameEl) {
                 nameEl.textContent = '未選擇檔案';
                 nameEl.classList.remove('has-file');
@@ -482,7 +467,11 @@
     });
 
     // ---------- HTML escape ----------
-    function escapeHtml(s) { return (s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    function escapeHtml(s) {
+        return (s || '').replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
     function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
 
     // ---------- 啟動 ----------

@@ -172,26 +172,7 @@
             return isMakeup ? '上班（補班）' : '上班日';
         };
 
-        // 政府行事曆說明
-        const govText = (() => {
-            const base = holidayLabel(day.gov_is_holiday, day.gov_is_makeup_workday);
-            const note = day.gov_note ? `／${day.gov_note}` : '';
-            return `政府：${base}${note}`;
-        })();
-
-        // 公司覆寫說明
-        const companyText = (() => {
-            let base = '照政府';
-            if (day.override_type === 'FORCE_HOLIDAY') base = '公司：強制休假';
-            else if (day.override_type === 'FORCE_WORKDAY') base = '公司：強制上班';
-            else base = '公司：照政府';
-            const note = day.override_note ? `／${day.override_note}` : '';
-            return `${base}${note}`;
-        })();
-
-        // 最終結果說明（實際在月曆上判斷用的旗標）
-        const finalText = `實際：${holidayLabel(day.is_holiday, day.is_makeup_workday)}`;
-
+        // 建立彈窗 DOM
         const modal = document.createElement('div');
         modal.className = 'cc-modal-backdrop';
         modal.innerHTML = `
@@ -200,11 +181,28 @@
         <h3>${dateStr}</h3>
         <button class="btn" id="ccClose">關閉</button>
       </header>
+
       <div class="cc-flags">
-        <div class="cc-flag gov">${escapeHtml(govText)}</div>
-        <div class="cc-flag company">${escapeHtml(companyText)}</div>
-        <div class="cc-flag final">${escapeHtml(finalText)}</div>
+        <div class="cc-flag gov"><span id="ccFlagGov"></span></div>
+        <div class="cc-flag company"><span id="ccFlagCompany"></span></div>
+        <div class="cc-flag final"><span id="ccFlagFinal"></span></div>
       </div>
+
+      <div class="cc-override-row">
+        <div class="cc-override-title">公司設定</div>
+        <div class="cc-override-body">
+          <div class="cc-override-modes">
+            <label><input type="radio" name="ccOverrideMode" value="FOLLOW"> 照政府</label>
+            <label><input type="radio" name="ccOverrideMode" value="FORCE_HOLIDAY"> 強制休假</label>
+            <label><input type="radio" name="ccOverrideMode" value="FORCE_WORKDAY"> 強制上班</label>
+          </div>
+          <div class="cc-override-note">
+            <input type="text" id="ccOverrideNote" placeholder="公司備註（可空白）">
+            <button class="btn xsm" id="ccOverrideSave">儲存公司設定</button>
+          </div>
+        </div>
+      </div>
+
       <div class="body">
         <div class="cc-row">
           <div>新增記事</div>
@@ -231,6 +229,75 @@
         document.body.appendChild(modal);
         $('#ccClose', modal).onclick = () => modal.remove();
 
+        const flagGovEl = $('#ccFlagGov', modal);
+        const flagCompanyEl = $('#ccFlagCompany', modal);
+        const flagFinalEl = $('#ccFlagFinal', modal);
+
+        // 依 day 內容重算三行文字
+        function refreshFlags() {
+            const govText = (() => {
+                const base = holidayLabel(day.gov_is_holiday, day.gov_is_makeup_workday);
+                const note = day.gov_note ? `／${day.gov_note}` : '';
+                return `政府：${base}${note}`;
+            })();
+
+            const companyText = (() => {
+                let base = '公司：照政府';
+                if (day.override_type === 'FORCE_HOLIDAY') base = '公司：強制休假';
+                else if (day.override_type === 'FORCE_WORKDAY') base = '公司：強制上班';
+                const note = day.override_note ? `／${day.override_note}` : '';
+                return `${base}${note}`;
+            })();
+
+            const finalText = `實際：${holidayLabel(day.is_holiday, day.is_makeup_workday)}`;
+
+            flagGovEl.textContent = govText;
+            flagCompanyEl.textContent = companyText;
+            flagFinalEl.textContent = finalText;
+        }
+
+        refreshFlags();
+
+        // ---- 初始化公司設定區（radio + 備註） ----
+        const modeInputs = $$('input[name="ccOverrideMode"]', modal);
+        const noteInput = $('#ccOverrideNote', modal);
+
+        let modeVal = 'FOLLOW';
+        if (day.override_type === 'FORCE_HOLIDAY') modeVal = 'FORCE_HOLIDAY';
+        else if (day.override_type === 'FORCE_WORKDAY') modeVal = 'FORCE_WORKDAY';
+
+        modeInputs.forEach(r => { r.checked = (r.value === modeVal); });
+        noteInput.value = day.override_note || '';
+
+        // 儲存公司設定
+        $('#ccOverrideSave', modal).onclick = async () => {
+            const sel = modeInputs.find(r => r.checked);
+            const mode = sel ? sel.value : 'FOLLOW';
+            const note = noteInput.value.trim() || null;
+
+            try {
+                await fetchJSON('/api/company_calendar/save_override.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: dateStr, mode, note })
+                });
+
+                // 重新載入當月，拿到最新 day 資料
+                await loadMonth();
+                const d2 = (state.monthData?.days || []).find(x => x.date === dateStr) || {};
+
+                // 更新本地 day 物件（讓旗標文字/顏色跟著變）
+                Object.assign(day, d2);
+                refreshFlags();
+
+                setModalMsg('公司設定已儲存', 'success');
+            } catch (e) {
+                console.warn(e);
+                setModalMsg('公司設定儲存失敗', 'error');
+            }
+        };
+
+        // ---- 記事列表與 CRUD（沿用你原本的） ----
         const listEl = $('#notesList', modal);
         const renderList = (arr) => {
             listEl.innerHTML = arr.map(n => `
@@ -315,6 +382,7 @@
             m.className = `cc-msg ${k}`;
         }
     }
+
 
 
 
